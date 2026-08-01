@@ -18,9 +18,14 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       autoLoadEntities: true,
-      synchronize: true, //talvez no convenga que esté en true en produccion
-      //porque en produccion mas que todo modificamos con migraciones, esto 
-      //podemos manejar tambien con variables de entorno
+      // Schema changes are handled EXCLUSIVELY through migrations
+      // (src/database/migrations). synchronize applies schema changes without
+      // versioning, review, or rollback — unsafe for production and cloud deploys.
+      synchronize: false,
+      // Migrations run manually with npm run migration:run (Laravel-style);
+      // they are never auto-applied at startup.
+      migrationsRun: false,
+      migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
     }),
     AuthModule,
     CommonModule,
