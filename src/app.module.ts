@@ -6,6 +6,7 @@ import { CommonModule } from './common/common.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { PatientsModule } from './patients/patients.module';
 import { SeedModule } from './seed/seed.module';
+import { SurgeryCatalogModule } from './surgery-catalog/surgery-catalog.module';
 import { ProfileModule } from './profile/profile.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
@@ -34,6 +35,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     CommonModule,
     PatientsModule,
     DoctorsModule,
+    SurgeryCatalogModule,
     SeedModule,
     ProfileModule,
     CloudinaryModule,
