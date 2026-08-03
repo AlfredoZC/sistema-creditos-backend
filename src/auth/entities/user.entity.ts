@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '../../common/enums';
 import { Profile } from '../../profile/entities/profile.entity';
 import {
   BeforeInsert,
@@ -17,37 +18,35 @@ export class User {
   id: string;
 
   @ApiProperty()
-  @Column('text', {
+  @Column('varchar', {
+    length: 255,
     unique: true,
   })
   email: string;
 
   @ApiProperty()
-  @Column('text', {
+  @Column('varchar', {
+    length: 255,
     select: false,
   })
   password: string;
 
   @ApiProperty()
-  @Column('text')
+  @Column('varchar', {
+    length: 50,
+  })
   name: string;
 
   @ApiProperty()
-  @Column('text')
-  lastName: string;
+  @Column({ type: 'enum', enum: UserRole, name: 'role' })
+  role: UserRole;
 
   @ApiProperty()
-  @Column('bool', {
+  @Column({
+    name: 'is_active',
     default: true,
   })
   isActive: boolean;
-
-  @ApiProperty()
-  @Column('text', {
-    array: true,
-    default: ['user'],
-  })
-  roles: string[];
 
   @OneToOne(() => Profile)
   @JoinColumn()
