@@ -4,11 +4,13 @@ import { DataSource } from 'typeorm';
 /**
  * Test-database bootstrap for integration specs.
  *
- * Creates the dedicated test database when missing, ensures the uuid-ossp
- * extension the Init migration relies on, and applies pending migrations
- * under a session-level advisory lock so concurrent test workers serialize
- * instead of racing. Idempotent: TypeORM only runs migrations not recorded
- * in the `migrations` table.
+ * The whole cycle — optional drop, CREATE DATABASE when missing, uuid-ossp
+ * extension, pending migrations — runs under a session-level advisory lock
+ * held on the ALWAYS-CONNECTABLE maintenance database connection. Concurrent
+ * test workers therefore serialize the full cycle instead of racing; the lock
+ * never lives on a connection to the test database, which a concurrent drop
+ * could terminate mid-flight. Idempotent: TypeORM only runs migrations not
+ * recorded in the `migrations` table.
  */
 
 const MAINTENANCE_DATABASE = 'postgres';
@@ -56,37 +58,35 @@ async function ensureTestDatabaseExists(): Promise<void> {
 }
 
 async function runPendingMigrations(): Promise<void> {
-  const lockPool = new Pool({
+  const dataSource = new DataSource({
+    type: 'postgres',
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT),
     database: TEST_DATABASE_NAME,
-    user: process.env.DB_USERNAME,
+    username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
+    synchronize: false,
+    migrations: [MIGRATIONS_GLOB],
   });
+  await dataSource.initialize();
+  try {
+    // The Init migration defaults user ids to uuid_generate_v4(), which
+    // requires uuid-ossp; a freshly created database does not have it.
+    await dataSource.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+    await dataSource.runMigrations();
+  } finally {
+    await dataSource.destroy();
+  }
+}
+
+async function withMigrationLock(action: () => Promise<void>): Promise<void> {
+  const lockPool = getMaintenancePool();
   const lockClient = await lockPool.connect();
   try {
     // Session-level locks must be acquired and released on the SAME
     // connection; the dedicated client below is that connection.
     await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
-    const dataSource = new DataSource({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT),
-      database: TEST_DATABASE_NAME,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      synchronize: false,
-      migrations: [MIGRATIONS_GLOB],
-    });
-    await dataSource.initialize();
-    try {
-      // The Init migration defaults user ids to uuid_generate_v4(), which
-      // requires uuid-ossp; a freshly created database does not have it.
-      await dataSource.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-      await dataSource.runMigrations();
-    } finally {
-      await dataSource.destroy();
-    }
+    await action();
   } finally {
     await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]);
     lockClient.release();
@@ -94,7 +94,25 @@ async function runPendingMigrations(): Promise<void> {
   }
 }
 
+/**
+ * Destructive helper for integration specs that must prove the fresh-database
+ * path: drops the test database under the migration advisory lock so the next
+ * ensureTestDbReady() creates and migrates it from scratch. Must run in-band.
+ */
+export async function dropTestDatabaseForFreshRun(): Promise<void> {
+  await withMigrationLock(async () => {
+    const maintenancePool = getMaintenancePool();
+    try {
+      await maintenancePool.query(`DROP DATABASE IF EXISTS ${TEST_DATABASE_NAME} WITH (FORCE)`);
+    } finally {
+      await maintenancePool.end();
+    }
+  });
+}
+
 export async function ensureTestDbReady(): Promise<void> {
-  await ensureTestDatabaseExists();
-  await runPendingMigrations();
+  await withMigrationLock(async () => {
+    await ensureTestDatabaseExists();
+    await runPendingMigrations();
+  });
 }

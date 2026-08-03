@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
-import { ensureTestDbReady } from './setup-test-db';
+import { dropTestDatabaseForFreshRun, ensureTestDbReady } from './setup-test-db';
 
 jest.setTimeout(60000);
 
@@ -17,15 +17,6 @@ function getMaintenancePool(): Pool {
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
   });
-}
-
-async function dropTestDatabaseIfExists(): Promise<void> {
-  const maintenancePool = getMaintenancePool();
-  try {
-    await maintenancePool.query(`DROP DATABASE IF EXISTS ${TEST_DATABASE_NAME} WITH (FORCE)`);
-  } finally {
-    await maintenancePool.end();
-  }
 }
 
 async function testDatabaseExists(): Promise<boolean> {
@@ -64,8 +55,14 @@ function getMigrationFileCount(): number {
 }
 
 describe('ensureTestDbReady (harness contract, design section 12)', () => {
+  // Destructive: only drops the shared test database (under the migration
+  // advisory lock) when explicitly requested, so plain `npm test` stays safe
+  // under parallel workers. Use `npm run test:integration:fresh` to prove the
+  // fresh-database path.
   beforeAll(async () => {
-    await dropTestDatabaseIfExists();
+    if (process.env.FRESH_TEST_DB === '1') {
+      await dropTestDatabaseForFreshRun();
+    }
   });
 
   it('creates a fresh test database and applies every pending migration', async () => {
