@@ -23,9 +23,10 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
       // versioning, review, or rollback — unsafe for production and cloud deploys.
       synchronize: false,
       // Migrations run manually with npm run migration:run (Laravel-style);
-      // they are never auto-applied at startup.
+      // they are never auto-applied at startup. The timestamped glob keeps
+      // non-migration files (e.g. migration specs) out of TypeORM's loader.
       migrationsRun: false,
-      migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+      migrations: [__dirname + '/database/migrations/[0-9]*{.ts,.js}'],
     }),
     AuthModule,
     CommonModule,

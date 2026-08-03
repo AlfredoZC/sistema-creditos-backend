@@ -17,7 +17,7 @@ async function getTableRowCount(tableName: string): Promise<number> {
 
 async function insertUser(email: string): Promise<void> {
   await dataSource.query(
-    `INSERT INTO users (email, password, name, "lastName") VALUES ($1, 'hashed', 'Name', 'Last')`,
+    `INSERT INTO users (email, password, name, role) VALUES ($1, 'hashed', 'Name', 'patient')`,
     [email],
   );
 }

@@ -17,5 +17,7 @@ export default new DataSource({
   password: process.env.DB_PASSWORD,
   synchronize: false,
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-  migrations: [__dirname + '/migrations/*{.ts,.js}'],
+  // Timestamped glob: only versioned migration files (Laravel-style), never
+  // non-migration files that may live in the same directory (e.g. specs).
+  migrations: [__dirname + '/migrations/[0-9]*{.ts,.js}'],
 });

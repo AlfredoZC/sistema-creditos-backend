@@ -16,7 +16,9 @@ import { DataSource } from 'typeorm';
 const MAINTENANCE_DATABASE = 'postgres';
 const TEST_DATABASE_NAME = 'db_creditos_test';
 const MIGRATION_LOCK_ID = 90123;
-const MIGRATIONS_GLOB = __dirname + '/../database/migrations/*{.ts,.js}';
+// Timestamped glob: only versioned migration files (Laravel-style), never
+// non-migration files that may live in the same directory (e.g. specs).
+const MIGRATIONS_GLOB = __dirname + '/../database/migrations/[0-9]*{.ts,.js}';
 
 interface PostgresError {
   code?: string;

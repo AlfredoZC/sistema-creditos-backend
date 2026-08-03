@@ -49,9 +49,11 @@ async function getAppliedMigrationCount(): Promise<number> {
 }
 
 function getMigrationFileCount(): number {
+  // Only timestamped versioned migration files count (same contract as the
+  // migrations glob); specs and other non-migration files are excluded.
   return fs
     .readdirSync(MIGRATIONS_DIRECTORY)
-    .filter((fileName) => fileName.endsWith('.ts')).length;
+    .filter((fileName) => /^\d.*\.ts$/.test(fileName)).length;
 }
 
 describe('ensureTestDbReady (harness contract, design section 12)', () => {
