@@ -1,0 +1,63 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Auth, GetUser } from '../auth/decorators';
+import { User } from '../auth/entities/user.entity';
+import { UserRole } from '../common/enums';
+import { CreatePaymentPlanDto } from './dto';
+import { PaymentPlansService } from './payment-plans.service';
+
+@ApiTags('Payment Plans')
+@Controller('payment-plans')
+export class PaymentPlansController {
+  constructor(private readonly paymentPlansService: PaymentPlansService) {}
+
+  // T1 (design section 8.1): plan + schedule + down payment + audit in ONE
+  // transaction. Office and admin only — patients never create plans.
+  @Post()
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @ApiResponse({ status: 201, description: 'Payment plan created' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'A plan already exists for this surgery, or the payment method is disabled',
+  })
+  create(
+    @Body() createPaymentPlanDto: CreatePaymentPlanDto,
+    @GetUser() user: User,
+  ) {
+    return this.paymentPlansService.create(createPaymentPlanDto, user);
+  }
+
+  @Get(':id')
+  @Auth()
+  @ApiResponse({ status: 200, description: 'Payment plan detail' })
+  @ApiResponse({
+    status: 403,
+    description: 'Patients can only access their own payment plans',
+  })
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.paymentPlansService.findOne(id, user);
+  }
+
+  // Installments with the derived overdue flag; read-only, never a write.
+  @Get(':id/installments')
+  @Auth()
+  @ApiResponse({ status: 200, description: 'Installments with overdue flag' })
+  @ApiResponse({
+    status: 403,
+    description: 'Patients can only access their own payment plans',
+  })
+  findInstallments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    return this.paymentPlansService.findInstallments(id, user);
+  }
+}
