@@ -1,7 +1,7 @@
 import { User } from './../auth/entities/user.entity';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { initialData } from './data/seed-data';
 
 @Injectable()
@@ -9,21 +9,25 @@ export class SeedService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  async runSeed() {
+  async runSeed(): Promise<string> {
     await this.deleteTables();
     await this.insertUsers();
 
     return 'SEED EXECUTED';
   }
 
-  private async deleteTables() {
-    const queryBuilder = this.userRepository.createQueryBuilder();
-    await queryBuilder.delete().where({}).execute();
+  private async deleteTables(): Promise<void> {
+    await this.dataSource.query(
+      `TRUNCATE TABLE "audit_logs", "payments", "payment_plans", "installments",
+        "surgery_doctors", "surgeries", "surgery_catalog", "patients", "doctors",
+        "users", "profiles" RESTART IDENTITY CASCADE`,
+    );
   }
 
-  private async insertUsers() {
+  private async insertUsers(): Promise<void> {
     const seedUsers = initialData.users;
 
     const users: User[] = [];
@@ -32,8 +36,6 @@ export class SeedService {
       users.push(this.userRepository.create(user));
     });
 
-    const dbUsers = await this.userRepository.save(seedUsers);
-
-    return dbUsers[0];
+    await this.userRepository.save(users);
   }
 }
