@@ -1,7 +1,5 @@
 import {
-  BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,10 +10,16 @@ import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { User } from './entities/user.entity';
-import { LoginUserDto, CreateUserDto } from './dto';
+import {
+  CreateStaffUserDto,
+  CreateUserDto,
+  LoginUserDto,
+} from './dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { JwtService } from '@nestjs/jwt';
 import { Profile } from '../profile/entities/profile.entity';
+import { UserRole } from '../common/enums';
+import { handleDatabaseError } from '../common/errors';
 
 @Injectable()
 export class AuthService {
@@ -35,7 +39,8 @@ export class AuthService {
 
       const user = this.userRepository.create({
         ...userData,
-        password: bcrypt.hashSync(password, 10), //10vueltas
+        password: bcrypt.hashSync(password, 10),
+        role: UserRole.PATIENT,
         profile,
       });
 
@@ -46,7 +51,27 @@ export class AuthService {
         token: this.getJwtToken({ id: user.id }),
       };
     } catch (error) {
-      this.handleDBErrors(error);
+      handleDatabaseError(error);
+    }
+  }
+
+  async createStaffUser(createStaffUserDto: CreateStaffUserDto) {
+    try {
+      const { password, ...userData } = createStaffUserDto;
+
+      const user = this.userRepository.create({
+        ...userData,
+        password: bcrypt.hashSync(password, 10),
+      });
+
+      await this.userRepository.save(user);
+      delete user.password;
+      return {
+        ...user,
+        token: this.getJwtToken({ id: user.id }),
+      };
+    } catch (error) {
+      handleDatabaseError(error);
     }
   }
 
@@ -60,6 +85,9 @@ export class AuthService {
       .select([
         'user.id',
         'user.email',
+        'user.name',
+        'user.role',
+        'user.isActive',
         'user.password', // Incluso si select: false, puedes seleccionarla explícitamente
         'profile',
       ])
@@ -72,6 +100,10 @@ export class AuthService {
     if (!bcrypt.compareSync(password, user.password))
       throw new UnauthorizedException('Credentials are not valid(password)');
 
+    if (!user.isActive)
+      throw new UnauthorizedException('User is inactive, talk with an admin');
+
+    delete user.password;
     return {
       ...user,
       token: this.getJwtToken({ id: user.id }),
@@ -101,11 +133,5 @@ export class AuthService {
   private getJwtToken(payload: JwtPayload) {
     const token = this.jwtService.sign(payload);
     return token;
-  }
-
-  private handleDBErrors(error: any): never {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
-    console.log(error);
-    throw new InternalServerErrorException('Please check server logs');
   }
 }
