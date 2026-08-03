@@ -8,9 +8,16 @@ import { DataSource } from 'typeorm';
  * The TypeORM `migrations` bookkeeping table is deliberately excluded:
  * truncating it would make the next ensureTestDbReady re-run every migration
  * against a schema that already exists.
+ *
+ * `payment_methods` is excluded for the same reason: it is reference data
+ * seeded once by migration 002 (cash, bank_transfer, qr, card). Migrations
+ * never re-run, the seed service deliberately does not touch it, and wiping
+ * it would permanently destroy the payment-methods catalog every time this
+ * helper runs (the design's own seed wipe list excludes it too).
  */
 
 const MIGRATIONS_TABLE = 'migrations';
+const REFERENCE_DATA_TABLES = new Set(['payment_methods']);
 
 export async function truncateAllTables(dataSource: DataSource): Promise<void> {
   const rows: { tableName: string }[] = await dataSource.query(
@@ -25,6 +32,13 @@ export async function truncateAllTables(dataSource: DataSource): Promise<void> {
   if (rows.length === 0) {
     return;
   }
-  const quotedTableNames = rows.map((row) => `"${row.tableName}"`).join(', ');
+  const quotedTableNames = rows
+    .map((row) => row.tableName)
+    .filter((tableName) => !REFERENCE_DATA_TABLES.has(tableName))
+    .map((tableName) => `"${tableName}"`)
+    .join(', ');
+  if (quotedTableNames.length === 0) {
+    return;
+  }
   await dataSource.query(`TRUNCATE TABLE ${quotedTableNames} RESTART IDENTITY CASCADE`);
 }
