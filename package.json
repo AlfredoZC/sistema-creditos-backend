@@ -82,6 +82,9 @@
     "setupFiles": [
       "<rootDir>/test-utils/load-test-env.ts"
     ],
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    },
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
