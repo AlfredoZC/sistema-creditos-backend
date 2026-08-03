@@ -6,6 +6,7 @@ import { AuditModule } from './audit/audit.module';
 import { CommonModule } from './common/common.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { PatientsModule } from './patients/patients.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { SeedModule } from './seed/seed.module';
 import { SurgeryCatalogModule } from './surgery-catalog/surgery-catalog.module';
 import { SurgeriesModule } from './surgeries/surgeries.module';
@@ -40,6 +41,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     DoctorsModule,
     SurgeryCatalogModule,
     SurgeriesModule,
+    PaymentMethodsModule,
     SeedModule,
     ProfileModule,
     CloudinaryModule,
