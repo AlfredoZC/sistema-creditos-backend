@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
 import { DoctorsModule } from '../doctors/doctors.module';
 import { PatientsModule } from '../patients/patients.module';
 import { SurgeryCatalogModule } from '../surgery-catalog/surgery-catalog.module';
@@ -16,6 +17,7 @@ import { SurgeriesService } from './surgeries.service';
     PatientsModule,
     DoctorsModule,
     SurgeryCatalogModule,
+    AuditModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
   exports: [TypeOrmModule, SurgeriesService],

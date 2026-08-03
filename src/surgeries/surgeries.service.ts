@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
 import { SurgeryDoctorRole } from '../common/enums';
 import { handleDatabaseError } from '../common/errors';
@@ -38,6 +39,7 @@ export class SurgeriesService {
     @InjectRepository(Doctor)
     private readonly doctorRepository: Repository<Doctor>,
     private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -98,10 +100,9 @@ export class SurgeriesService {
   }
 
   /**
-   * T6: status change + audit entry in ONE transaction. The audit module is a
-   * later PR slice (task 9.2); until AuditService lands, the entry is written
-   * inline with the same manager so it commits or rolls back with the status
-   * change.
+   * T6: status change + audit entry in ONE transaction. The audit entry is
+   * written through AuditService.log with the transaction's manager, so it
+   * commits or rolls back with the status change (design AD3).
    */
   async updateStatus(
     id: string,
@@ -117,13 +118,14 @@ export class SurgeriesService {
         surgery.status = updateSurgeryStatusDto.status;
         await manager.save(surgery);
 
-        await this.writeStatusAudit(
-          manager,
-          currentUser.id,
-          surgery.id,
+        await this.auditService.log(manager, {
+          userId: currentUser.id,
+          action: AUDIT_ACTION_STATUS_CHANGED,
+          tableName: AUDIT_TABLE_SURGERIES,
+          recordId: surgery.id,
           previousData,
-          { status: surgery.status },
-        );
+          newData: { status: surgery.status },
+        });
         return surgery;
       });
     } catch (error) {
@@ -244,26 +246,5 @@ export class SurgeriesService {
         'total_cost cannot change once a payment plan exists for this surgery',
       );
     }
-  }
-
-  private async writeStatusAudit(
-    manager: EntityManager,
-    actorUserId: string,
-    surgeryId: string,
-    previousData: Record<string, unknown>,
-    newData: Record<string, unknown>,
-  ): Promise<void> {
-    await manager.query(
-      `INSERT INTO audit_logs (user_id, action, table_name, record_id, previous_data, new_data)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        actorUserId,
-        AUDIT_ACTION_STATUS_CHANGED,
-        AUDIT_TABLE_SURGERIES,
-        surgeryId,
-        JSON.stringify(previousData),
-        JSON.stringify(newData),
-      ],
-    );
   }
 }
