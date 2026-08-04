@@ -1,4 +1,7 @@
 export * from './amortization-mode.enum';
+export * from './bot-conversation-state.enum';
+export * from './bot-direction.enum';
+export * from './dispatch-status.enum';
 export * from './installment-status.enum';
 export * from './payment-plan-status.enum';
 export * from './payment-plan-type.enum';
@@ -6,4 +9,6 @@ export * from './payment-status.enum';
 export * from './payment-type.enum';
 export * from './surgery-doctor-role.enum';
 export * from './surgery-status.enum';
+export * from './template-category.enum';
+export * from './template-status.enum';
 export * from './user-role.enum';

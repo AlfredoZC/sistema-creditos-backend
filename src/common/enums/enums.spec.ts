@@ -1,5 +1,8 @@
 import {
   AmortizationMode,
+  BotConversationState,
+  BotDirection,
+  DispatchStatus,
   InstallmentStatus,
   PaymentPlanStatus,
   PaymentPlanType,
@@ -7,6 +10,8 @@ import {
   PaymentType,
   SurgeryDoctorRole,
   SurgeryStatus,
+  TemplateCategory,
+  TemplateStatus,
   UserRole,
 } from './index';
 
@@ -80,6 +85,46 @@ describe('shared domain enums (design section 4 — 1:1 with PG enum types)', ()
     expect(Object.values(AmortizationMode)).toEqual([
       'reduce_installment',
       'reduce_term',
+    ]);
+  });
+
+  it('DispatchStatus maps dispatch_status values in declaration order', () => {
+    expect(Object.values(DispatchStatus)).toEqual([
+      'queued',
+      'sent',
+      'delivered',
+      'read',
+      'failed',
+    ]);
+  });
+
+  it('BotDirection maps bot_direction values in declaration order', () => {
+    expect(Object.values(BotDirection)).toEqual(['inbound', 'outbound']);
+  });
+
+  it('BotConversationState maps bot_conversation_state values in declaration order', () => {
+    expect(Object.values(BotConversationState)).toEqual([
+      'unidentified',
+      'awaiting_document',
+      'identified',
+    ]);
+  });
+
+  it('TemplateCategory maps template_category values in declaration order', () => {
+    expect(Object.values(TemplateCategory)).toEqual([
+      'utility',
+      'marketing',
+      'authentication',
+    ]);
+  });
+
+  it('TemplateStatus maps template_status values in declaration order', () => {
+    expect(Object.values(TemplateStatus)).toEqual([
+      'draft',
+      'submitted',
+      'approved',
+      'rejected',
+      'paused',
     ]);
   });
 });
