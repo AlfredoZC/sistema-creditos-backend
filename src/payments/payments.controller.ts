@@ -1,7 +1,16 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
+import { UserRole } from '../common/enums';
 import { CreatePaymentDto } from './dto';
 import { PaymentsService } from './payments.service';
 
@@ -25,5 +34,27 @@ export class PaymentsController {
     @GetUser() user: User,
   ) {
     return this.paymentsService.register(createPaymentDto, user);
+  }
+
+  // T4 (design section 8.2): office/admin confirm a pending payment; money
+  // movement, recalculation and audit all run in ONE transaction.
+  @Post(':id/confirm')
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({ status: 200, description: 'Payment confirmed' })
+  @ApiResponse({ status: 409, description: 'Terminal state or conflict' })
+  confirm(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.paymentsService.confirm(id, user);
+  }
+
+  // T5 (design section 8.1): office/admin reject a pending payment; the
+  // rejection is side-effect free.
+  @Post(':id/reject')
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({ status: 200, description: 'Payment rejected' })
+  @ApiResponse({ status: 409, description: 'Terminal state' })
+  reject(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.paymentsService.reject(id, user);
   }
 }

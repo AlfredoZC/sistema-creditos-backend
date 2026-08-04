@@ -793,4 +793,562 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(response.status).toBe(401);
     });
   });
+
+  describe('confirmation (T4: office confirms a pending payment)', () => {
+    it('confirms a pending installment payment and accumulates it (partial)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '500.00',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      expect(upload.status).toBe(201);
+      expect(upload.body.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+
+      const response = await confirmPayment(office.token, upload.body.id as string);
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe(PaymentStatus.CONFIRMED);
+      // Spec "Partial payment": paid_amount 500.00, status partial; balance
+      // drops by creditPrincipal(500) = HALF_UP(913.27*500/1113.27) = 410.17.
+      const installments = await installmentRows(planId);
+      expect(installments[0]).toMatchObject({
+        paid_amount: '500.00',
+        status: InstallmentStatus.PARTIAL,
+      });
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('9589.83');
+    });
+
+    it('completes the installment with a second confirmed payment (paid)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+
+      const first = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '500.00',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      expect(await confirmPayment(office.token, first.body.id as string)).toMatchObject({
+        status: 200,
+      });
+
+      const second = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '613.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const response = await confirmPayment(office.token, second.body.id as string);
+
+      // Spec "Installment fully paid": 500.00 + 613.27 = total 1,113.27 ->
+      // status 'paid'; the balance takes the remaining principal credit
+      // 913.27 - 410.17 = 503.10 on top of the 410.17 already credited.
+      expect(response.status).toBe(200);
+      const installments = await installmentRows(planId);
+      expect(installments[0]).toMatchObject({
+        paid_amount: '1113.27',
+        status: InstallmentStatus.PAID,
+      });
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('9086.73');
+    });
+
+    it('rejects an overpayment with 409 (D1) and rolls the confirmation back', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.28',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const paymentId = upload.body.id as string;
+      const response = await confirmPayment(office.token, paymentId);
+
+      // Spec "Confirmation failure rolls back everything": the payment stays
+      // pending and no balance, installment or audit effect is visible.
+      expect(response.status).toBe(409);
+      expect(response.body.message).toBe(
+        "amount exceeds the installment's remaining balance; use a principal_amortization for extra payments",
+      );
+      const payments = await paymentRows(planId);
+      expect(payments[0].status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('10000.00');
+      const installments = await installmentRows(planId);
+      expect(installments[0].paid_amount).toBe('0.00');
+      expect(await auditRowsForPayment(paymentId)).toHaveLength(0);
+      expect(await recalcAuditCount(office.id)).toBe(0);
+    });
+
+    it('rejects confirming a payment in a terminal state (409)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+      const body = {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      };
+
+      const confirmed = await registerPayment(office.token, body);
+      expect(confirmed.status).toBe(201);
+      const again = await confirmPayment(office.token, confirmed.body.id as string);
+      expect(again.status).toBe(409);
+      expect(again.body.message).toBe('Payment is already confirmed or rejected');
+
+      const rejected = await registerPayment(patient.token, body);
+      expect(await rejectPayment(office.token, rejected.body.id as string)).toMatchObject({
+        status: 200,
+      });
+      const afterReject = await confirmPayment(office.token, rejected.body.id as string);
+      expect(afterReject.status).toBe(409);
+    });
+
+    it('forbids a patient from confirming (403)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+
+      const response = await confirmPayment(patient.token, upload.body.id as string);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('returns 404 when the payment does not exist', async () => {
+      const office = await officeUser();
+
+      const response = await confirmPayment(
+        office.token,
+        '00000000-0000-4000-8000-000000000000',
+      );
+
+      expect(response.status).toBe(404);
+      // Real route exists: the 404 comes from the service, not a missing route.
+      expect(response.body.message).toBe('Payment not found');
+    });
+
+    it('rejects confirmation when the plan is not payable (409)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      // A completed or cancelled plan can never receive money effects.
+      await dataSource.query(
+        `UPDATE payment_plans SET status = 'completed' WHERE id = $1`,
+        [planId],
+      );
+
+      const response = await confirmPayment(office.token, upload.body.id as string);
+
+      expect(response.status).toBe(409);
+      expect(response.body.message).toBe('Payment plan is not active');
+      const payments = await paymentRows(planId);
+      expect(payments[0].status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+    });
+
+    it('recalculates with reduce_installment and reproduces Option A exactly', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      // Financed 6,155.19 @2% n=8; amortizing 1,000.00 leaves the pinned
+      // balance 5,155.19 -> A = 703.73, lines 1-7 at 703.73, line 8 = 703.76,
+      // sum of totals 5,629.87 (design 7, Option A).
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '6155.19',
+        8,
+      );
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        paymentMethodId: await cashMethodId(),
+        amount: '1000.00',
+        type: PaymentType.PRINCIPAL_AMORTIZATION,
+        amortizationMode: AmortizationMode.REDUCE_INSTALLMENT,
+      });
+      const paymentId = upload.body.id as string;
+
+      const response = await confirmPayment(office.token, paymentId);
+
+      expect(response.status).toBe(200);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('5155.19');
+
+      const installments = await installmentRows(planId);
+      expect(installments).toHaveLength(8);
+      for (let index = 0; index < 7; index++) {
+        expect(installments[index].total_amount).toBe('703.73');
+        expect(installments[index].status).toBe(InstallmentStatus.PENDING);
+      }
+      expect(installments[7]).toMatchObject({
+        principal_amount: '689.96',
+        interest_amount: '13.80',
+        total_amount: '703.76',
+        status: InstallmentStatus.PENDING,
+      });
+      const sums: { total: string }[] = await dataSource.query(
+        `SELECT SUM(total_amount)::text AS total FROM installments WHERE payment_plan_id = $1`,
+        [planId],
+      );
+      expect(sums[0].total).toBe('5629.87');
+
+      // Two in-transaction audit entries: the confirmation plus the
+      // recalculation with pre/post balance state.
+      const paymentAudits = await auditRowsForPayment(paymentId);
+      expect(paymentAudits).toHaveLength(1);
+      expect(paymentAudits[0].action).toBe('payment.confirmed');
+      const recalcAudits = await dataSource.query(
+        `SELECT user_id, action, previous_data, new_data FROM audit_logs
+         WHERE record_id = $1 AND action = 'payment_plan.recalculated'`,
+        [planId],
+      );
+      expect(recalcAudits).toHaveLength(1);
+      expect(recalcAudits[0].user_id).toBe(office.id);
+      expect(recalcAudits[0].previous_data.outstandingBalance).toBe('6155.19');
+      expect(recalcAudits[0].new_data.outstandingBalance).toBe('5155.19');
+      expect(recalcAudits[0].previous_data.installments).toHaveLength(8);
+      expect(recalcAudits[0].new_data.installments).toHaveLength(8);
+      expect(recalcAudits[0].new_data.installments[0].totalAmount).toBe('703.73');
+      expect(recalcAudits[0].new_data.installments[7].totalAmount).toBe('703.76');
+    });
+
+    it('recalculates with reduce_term and reproduces Option B exactly', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      // Reference plan A = 1,113.27; amortizing 4,844.81 leaves 5,155.19 ->
+      // 4 full installments of 1,113.27 + a final fractional 1,011.50
+      // (991.67 + 19.83); the 5 trailing lines are cancelled IN PLACE.
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        paymentMethodId: await cashMethodId(),
+        amount: '4844.81',
+        type: PaymentType.PRINCIPAL_AMORTIZATION,
+        amortizationMode: AmortizationMode.REDUCE_TERM,
+      });
+
+      const response = await confirmPayment(office.token, upload.body.id as string);
+
+      expect(response.status).toBe(200);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('5155.19');
+
+      const installments = await installmentRows(planId);
+      // Never deleted: the plan still has all 10 rows.
+      expect(installments).toHaveLength(10);
+      for (let index = 0; index < 4; index++) {
+        expect(installments[index]).toMatchObject({
+          total_amount: '1113.27',
+          status: InstallmentStatus.PENDING,
+        });
+      }
+      expect(installments[4]).toMatchObject({
+        principal_amount: '991.67',
+        interest_amount: '19.83',
+        total_amount: '1011.50',
+        status: InstallmentStatus.PENDING,
+      });
+      for (let index = 5; index < 10; index++) {
+        expect(installments[index].status).toBe(InstallmentStatus.CANCELLED);
+        // Cancelled rows keep a positive total under the DB CHECKs.
+        expect(Number(installments[index].total_amount)).toBeGreaterThan(0);
+      }
+    });
+
+    it('rejects an amortization above the outstanding balance with 409', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '5000.00',
+        6,
+      );
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        paymentMethodId: await cashMethodId(),
+        amount: '5500.00',
+        type: PaymentType.PRINCIPAL_AMORTIZATION,
+        amortizationMode: AmortizationMode.REDUCE_INSTALLMENT,
+      });
+      const paymentId = upload.body.id as string;
+
+      const response = await confirmPayment(office.token, paymentId);
+
+      expect(response.status).toBe(409);
+      expect(response.body.message).toBe('amount exceeds the outstanding balance');
+      const payments = await paymentRows(planId);
+      expect(payments[0].status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('5000.00');
+      const installments = await installmentRows(planId);
+      // Unchanged original schedule: A = 892.63 for 5,000 @2% n=6.
+      expect(installments[0].total_amount).toBe('892.63');
+      expect(await recalcAuditCount(office.id)).toBe(0);
+    });
+
+    it('cancels every pending installment and completes the plan when the balance hits zero', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '4000.00',
+        4,
+      );
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        paymentMethodId: await cashMethodId(),
+        amount: '4000.00',
+        type: PaymentType.PRINCIPAL_AMORTIZATION,
+        amortizationMode: AmortizationMode.REDUCE_INSTALLMENT,
+      });
+
+      const response = await confirmPayment(office.token, upload.body.id as string);
+
+      expect(response.status).toBe(200);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('0.00');
+      // Design 7 edge: zero balance cancels ALL pending rows (in place).
+      const installments = await installmentRows(planId);
+      expect(installments).toHaveLength(4);
+      for (const installment of installments) {
+        expect(installment.status).toBe(InstallmentStatus.CANCELLED);
+      }
+      // Plan evaluation: balance 0 + no unpaid non-cancelled rows -> completed.
+      expect(plan.status).toBe(PaymentPlanStatus.COMPLETED);
+    });
+
+    it('completes an upfront plan when its single installment is confirmed paid', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const catalog = await createCatalogEntry(office.token);
+      const surgeryId = await createSurgery(
+        office.token,
+        patientId,
+        catalog.id,
+        '7000.00',
+      );
+      const created = await request(app.getHttpServer())
+        .post('/api/payment-plans')
+        .set('Authorization', `Bearer ${office.token}`)
+        .send({ surgeryId, type: PaymentPlanType.UPFRONT });
+      expect(created.status).toBe(201);
+      const planId = created.body.id as string;
+      const installment1 = await installmentIdFor(planId, 1);
+
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '7000.00',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const response = await confirmPayment(office.token, upload.body.id as string);
+
+      expect(response.status).toBe(200);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('0.00');
+      expect(plan.status).toBe(PaymentPlanStatus.COMPLETED);
+      const installments = await installmentRows(planId);
+      expect(installments[0]).toMatchObject({
+        paid_amount: '7000.00',
+        status: InstallmentStatus.PAID,
+      });
+    });
+  });
+
+  describe('rejection (T5: office rejects a pending payment)', () => {
+    it('rejects a pending payment with zero side effects', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        paymentMethodId: await cashMethodId(),
+        amount: '3000.00',
+        type: PaymentType.PRINCIPAL_AMORTIZATION,
+        amortizationMode: AmortizationMode.REDUCE_INSTALLMENT,
+      });
+      const paymentId = upload.body.id as string;
+
+      const response = await rejectPayment(office.token, paymentId);
+
+      // Spec "Rejection is side-effect free": status rejected, and the balance
+      // and schedule are untouched.
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe(PaymentStatus.REJECTED);
+      const plan = (await planRows(planId))[0];
+      expect(plan.outstanding_balance).toBe('10000.00');
+      const installments = await installmentRows(planId);
+      expect(installments[0].total_amount).toBe('1113.27');
+      expect(installments[0].status).toBe(InstallmentStatus.PENDING);
+      expect(await recalcAuditCount(office.id)).toBe(0);
+
+      // Exactly one audit entry with actor attribution and status transition.
+      const audits = await auditRowsForPayment(paymentId);
+      expect(audits).toHaveLength(1);
+      expect(audits[0].action).toBe('payment.rejected');
+      expect(audits[0].user_id).toBe(office.id);
+      expect(audits[0].table_name).toBe('payments');
+      expect(audits[0].record_id).toBe(paymentId);
+      expect(audits[0].previous_data?.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+      expect(audits[0].new_data?.status).toBe(PaymentStatus.REJECTED);
+    });
+
+    it('rejects a payment already in a terminal state (409)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+      const body = {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      };
+
+      const confirmed = await registerPayment(office.token, body);
+      const confirmAgain = await rejectPayment(office.token, confirmed.body.id as string);
+      expect(confirmAgain.status).toBe(409);
+
+      const rejected = await registerPayment(patient.token, body);
+      expect(await rejectPayment(office.token, rejected.body.id as string)).toMatchObject({
+        status: 200,
+      });
+      const rejectAgain = await rejectPayment(office.token, rejected.body.id as string);
+      expect(rejectAgain.status).toBe(409);
+      expect(rejectAgain.body.message).toBe('Payment is already confirmed or rejected');
+    });
+
+    it('forbids a patient from rejecting (403)', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const { planId } = await createCreditPlanForPatient(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
+      const installment1 = await installmentIdFor(planId, 1);
+      const upload = await registerPayment(patient.token, {
+        paymentPlanId: planId,
+        installmentId: installment1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+
+      const response = await rejectPayment(patient.token, upload.body.id as string);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('returns 404 when the payment does not exist', async () => {
+      const office = await officeUser();
+
+      const response = await rejectPayment(
+        office.token,
+        '00000000-0000-4000-8000-000000000000',
+      );
+
+      expect(response.status).toBe(404);
+      // Real route exists: the 404 comes from the service, not a missing route.
+      expect(response.body.message).toBe('Payment not found');
+    });
+  });
 });

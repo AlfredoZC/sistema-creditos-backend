@@ -28,6 +28,7 @@ import { Payment } from './entities';
 const MONEY_DECIMALS = 2;
 const HALF_UP_ROUNDING = Decimal.ROUND_HALF_UP;
 const AUDIT_ACTION_PAYMENT_CONFIRMED = 'payment.confirmed';
+const AUDIT_ACTION_PAYMENT_REJECTED = 'payment.rejected';
 const AUDIT_ACTION_PLAN_RECALCULATED = 'payment_plan.recalculated';
 const AUDIT_TABLE_PAYMENTS = 'payments';
 const AUDIT_TABLE_PAYMENT_PLANS = 'payment_plans';
@@ -118,6 +119,69 @@ export class PaymentsService {
         if (isStaff) {
           await this.applyPaymentEffects(manager, payment, currentUser.id);
         }
+        return payment;
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
+  /**
+   * T4 (design section 8.2): office/admin confirmation. The payment row is
+   * locked first and must be pending (both targets are terminal), then the
+   * plan row is locked FOR UPDATE inside the same transaction and the shared
+   * effect/audit core runs; any failure rolls everything back.
+   */
+  async confirm(id: string, currentUser: User): Promise<Payment> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const payment = await manager.findOne(Payment, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!payment) throw new NotFoundException('Payment not found');
+        if (payment.status !== PaymentStatus.PENDING_CONFIRMATION) {
+          throw new ConflictException(
+            'Payment is already confirmed or rejected',
+          );
+        }
+        await this.applyPaymentEffects(manager, payment, currentUser.id);
+        return payment;
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
+  /**
+   * T5 (design section 8.1): office/admin rejection is side-effect free —
+   * only the status transition and its audit entry are written.
+   */
+  async reject(id: string, currentUser: User): Promise<Payment> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const payment = await manager.findOne(Payment, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!payment) throw new NotFoundException('Payment not found');
+        if (payment.status !== PaymentStatus.PENDING_CONFIRMATION) {
+          throw new ConflictException(
+            'Payment is already confirmed or rejected',
+          );
+        }
+        payment.status = PaymentStatus.REJECTED;
+        await manager.save(payment);
+        await this.auditService.log(manager, {
+          userId: currentUser.id,
+          action: AUDIT_ACTION_PAYMENT_REJECTED,
+          tableName: AUDIT_TABLE_PAYMENTS,
+          recordId: payment.id,
+          previousData: { status: PaymentStatus.PENDING_CONFIRMATION },
+          newData: { status: PaymentStatus.REJECTED },
+        });
         return payment;
       });
     } catch (error) {
