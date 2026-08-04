@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -56,5 +57,14 @@ export class PaymentsController {
   @ApiResponse({ status: 409, description: 'Terminal state' })
   reject(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.paymentsService.reject(id, user);
+  }
+
+  // Payment history (design section 11): office/admin any payment, patient
+  // own plan only.
+  @Get()
+  @Auth()
+  @ApiResponse({ status: 200, description: 'Payment history' })
+  findAll(@GetUser() user: User) {
+    return this.paymentsService.findAll(user);
   }
 }

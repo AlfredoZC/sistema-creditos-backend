@@ -191,6 +191,31 @@ export class PaymentsService {
   }
 
   /**
+   * Read side (design section 11): office/admin see every payment; a patient
+   * only the payments of their own plan (ownership derived through
+   * surgery.patient.user_id, which also covers office-recorded rows whose
+   * patient_user_id is NULL) plus their own receipt uploads.
+   */
+  async findAll(currentUser: User): Promise<Payment[]> {
+    const payments = await this.paymentRepository.find({
+      relations: [
+        'paymentPlan',
+        'paymentPlan.surgery',
+        'paymentPlan.surgery.patient',
+      ],
+      order: { paidAt: 'DESC' },
+    });
+    if (!this.isStaff(currentUser)) {
+      return payments.filter(
+        (payment) =>
+          payment.patientUserId === currentUser.id ||
+          payment.paymentPlan?.surgery?.patient?.userId === currentUser.id,
+      );
+    }
+    return payments;
+  }
+
+  /**
    * Shared money-movement core for office auto-confirm (T2) and office
    * confirmation (T4, design section 8.2): lock the plan row FOR UPDATE,
    * assert the plan is payable, switch effects by payment type (installment

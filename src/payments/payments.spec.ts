@@ -1351,4 +1351,168 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(response.body.message).toBe('Payment not found');
     });
   });
+
+  describe('payment history (design section 11: office any, patient own plan)', () => {
+    it('lets an office user see every payment across plans', async () => {
+      const office = await officeUser();
+      const patientA = await patientUser();
+      const patientB = await patientUser();
+      const patientAId = await createPatientRaw(patientA.id);
+      const patientBId = await createPatientRaw(patientB.id);
+      const planA = await createCreditPlanForPatient(
+        office.token,
+        patientAId,
+        '10000.00',
+        10,
+      );
+      const planB = await createCreditPlanForPatient(
+        office.token,
+        patientBId,
+        '5000.00',
+        6,
+      );
+      const installmentA1 = await installmentIdFor(planA.planId, 1);
+      const installmentB1 = await installmentIdFor(planB.planId, 1);
+
+      const onA = await registerPayment(office.token, {
+        paymentPlanId: planA.planId,
+        installmentId: installmentA1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const uploadA = await registerPayment(patientA.token, {
+        paymentPlanId: planA.planId,
+        installmentId: installmentA1,
+        paymentMethodId: await cashMethodId(),
+        amount: '500.00',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const onB = await registerPayment(office.token, {
+        paymentPlanId: planB.planId,
+        installmentId: installmentB1,
+        paymentMethodId: await cashMethodId(),
+        amount: '892.63',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+
+      const response = await listPayments(office.token);
+
+      // The office history spans the whole shared test DB (other suites leave
+      // rows too), so containment — not an exact count — proves visibility.
+      expect(response.status).toBe(200);
+      const ids = new Set(
+        response.body.map((payment: { id: string }) => payment.id),
+      );
+      expect(ids).toContain(onA.body.id);
+      expect(ids).toContain(uploadA.body.id);
+      expect(ids).toContain(onB.body.id);
+    });
+
+    it('lets a patient see the payments of their own plan only', async () => {
+      const office = await officeUser();
+      const patientA = await patientUser();
+      const patientB = await patientUser();
+      const patientAId = await createPatientRaw(patientA.id);
+      const patientBId = await createPatientRaw(patientB.id);
+      const planA = await createCreditPlanForPatient(
+        office.token,
+        patientAId,
+        '10000.00',
+        10,
+      );
+      const planB = await createCreditPlanForPatient(
+        office.token,
+        patientBId,
+        '5000.00',
+        6,
+      );
+      const installmentA1 = await installmentIdFor(planA.planId, 1);
+      const installmentB1 = await installmentIdFor(planB.planId, 1);
+
+      const officeOnA = await registerPayment(office.token, {
+        paymentPlanId: planA.planId,
+        installmentId: installmentA1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      await registerPayment(patientA.token, {
+        paymentPlanId: planA.planId,
+        installmentId: installmentA1,
+        paymentMethodId: await cashMethodId(),
+        amount: '500.00',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const officeOnB = await registerPayment(office.token, {
+        paymentPlanId: planB.planId,
+        installmentId: installmentB1,
+        paymentMethodId: await cashMethodId(),
+        amount: '892.63',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+
+      // The office counter payment for plan A is part of patient A's own
+      // history even though its patient_user_id is NULL (row 3 of spec 5.11:
+      // office-recorded rows carry no patient user).
+      const response = await listPayments(patientA.token);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+      const ids = new Set(
+        response.body.map((payment: { id: string }) => payment.id),
+      );
+      expect(ids).toContain(officeOnA.body.id);
+      expect(ids).not.toContain(officeOnB.body.id);
+      const officeEntry = response.body.find(
+        (payment: { id: string }) => payment.id === officeOnA.body.id,
+      );
+      expect(officeEntry.status).toBe(PaymentStatus.CONFIRMED);
+      expect(officeEntry.patientUserId).toBeNull();
+    });
+
+    it('never exposes another patient payments in the history', async () => {
+      const office = await officeUser();
+      const patientA = await patientUser();
+      const patientB = await patientUser();
+      const patientAId = await createPatientRaw(patientA.id);
+      const patientBId = await createPatientRaw(patientB.id);
+      const planA = await createCreditPlanForPatient(
+        office.token,
+        patientAId,
+        '10000.00',
+        10,
+      );
+      const planB = await createCreditPlanForPatient(
+        office.token,
+        patientBId,
+        '5000.00',
+        6,
+      );
+      const installmentA1 = await installmentIdFor(planA.planId, 1);
+      const installmentB1 = await installmentIdFor(planB.planId, 1);
+
+      await registerPayment(office.token, {
+        paymentPlanId: planA.planId,
+        installmentId: installmentA1,
+        paymentMethodId: await cashMethodId(),
+        amount: '1113.27',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+      const onB = await registerPayment(office.token, {
+        paymentPlanId: planB.planId,
+        installmentId: installmentB1,
+        paymentMethodId: await cashMethodId(),
+        amount: '892.63',
+        type: PaymentType.INSTALLMENT_PAYMENT,
+      });
+
+      const response = await listPayments(patientB.token);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].id).toBe(onB.body.id);
+      expect(response.body[0].amount).toBe('892.63');
+    });
+  });
 });
