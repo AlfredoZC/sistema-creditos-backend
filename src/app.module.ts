@@ -8,6 +8,7 @@ import { DoctorsModule } from './doctors/doctors.module';
 import { PatientsModule } from './patients/patients.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { PaymentPlansModule } from './payment-plans/payment-plans.module';
+import { PaymentsModule } from './payments/payments.module';
 import { SeedModule } from './seed/seed.module';
 import { SurgeryCatalogModule } from './surgery-catalog/surgery-catalog.module';
 import { SurgeriesModule } from './surgeries/surgeries.module';
@@ -44,6 +45,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     SurgeriesModule,
     PaymentMethodsModule,
     PaymentPlansModule,
+    PaymentsModule,
     SeedModule,
     ProfileModule,
     CloudinaryModule,

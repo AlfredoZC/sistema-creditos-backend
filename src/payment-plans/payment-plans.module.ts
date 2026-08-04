@@ -28,6 +28,8 @@ import { RecalculationStrategyFactory } from './strategies';
     AuditModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
-  exports: [TypeOrmModule, PaymentPlansService],
+  // The recalculation factory is exported so the payments module (AD4) can
+  // inject it for confirmation-time amortization recalculation (design 7).
+  exports: [TypeOrmModule, PaymentPlansService, RecalculationStrategyFactory],
 })
 export class PaymentPlansModule {}
