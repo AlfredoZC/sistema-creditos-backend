@@ -2,7 +2,7 @@
 
 Diccionario del esquema final de la plataforma de créditos, en español, para equipos técnicos y de negocio. Documenta todas las tablas, columnas, tipos, restricciones y la lógica de financiamiento y amortización.
 
-**Fuente de verdad:** migraciones finales `1786000000001-AuthSingleRole.ts` (001) y `1786000000002-CoreModules.ts` (002), más la migración base `1785621997266-Init.ts` para las tablas preexistentes `users` y `profiles`.
+**Fuente de verdad:** migraciones finales `1786000000001-AuthSingleRole.ts` (001), `1786000000002-CoreModules.ts` (002) y `1786000000003-WhatsAppBot.ts` (003), más la migración base `1785621997266-Init.ts` para las tablas preexistentes `users` y `profiles`.
 
 **Convenciones**
 
@@ -19,6 +19,7 @@ Diccionario del esquema final de la plataforma de créditos, en español, para e
 | `1785621997266-Init.ts` | Baseline preexistente: crea `profiles` y `users` (con `roles text[]`, `lastName`, `isActive`). |
 | `1786000000001-AuthSingleRole.ts` | Refactor de autenticación: crea el tipo `user_role`, agrega `users.role` (con migración de datos `roles[1]` → `role`), elimina `roles` y `lastName`, renombra `isActive` → `is_active`, alinea longitudes `VARCHAR` y el default de `id` a `gen_random_uuid()`. |
 | `1786000000002-CoreModules.ts` | Crea los 8 tipos enum restantes y las 10 tablas de negocio (`patients`, `doctors`, `surgery_catalog`, `surgeries`, `surgery_doctors`, `payment_plans`, `installments`, `payment_methods`, `payments`, `audit_logs`) con CHECKs, UNIQUEs, índices (incluido el índice parcial único de un principal por cirugía) y la semilla de `payment_methods`. |
+| `1786000000003-WhatsAppBot.ts` | Crea los 5 tipos enum del módulo WhatsApp (`dispatch_status`, `bot_direction`, `bot_conversation_state`, `template_category`, `template_status`), la tabla de respaldo temporal `phone_normalization_backup` y las 4 tablas de negocio (`message_templates`, `whatsapp_dispatches`, `bot_conversations`, `bot_messages`) con sus CHECKs, UNIQUEs e índices; ejecuta el pase de datos de teléfonos (canonicalización conservadora con respaldo y reporte). |
 
 ---
 
@@ -190,6 +191,80 @@ Bitácora de auditoría, de solo escritura (append-only). `record_id` es polimó
 | new_data | JSONB | No | Estado nuevo del registro (cuando aplica). |
 | created_at | TIMESTAMPTZ | Sí | Fecha y hora del registro. `DEFAULT now()`. |
 
+## message_templates
+
+Plantillas de mensaje de WhatsApp (Meta). `body_template` declara placeholders contiguos `{{1}}…{{N}}` y `sample_variables` sus valores de ejemplo; el envío exige que las variables del despacho mapeen 1:1. UNIQUE `(name, language)`: par de identidad en Meta. Solo las plantillas `approved` y `is_active = true` se pueden despachar.
+
+| Elemento | Tipo de Dato | Requerido | Descripción |
+|---|---|---|---|
+| id | UUID | Sí | [PK] Identificador de la plantilla. `DEFAULT gen_random_uuid()`. |
+| name | VARCHAR(100) | Sí | Nombre de la plantilla (nombre en Meta). UNIQUE `(name, language)`. |
+| category | template_category | Sí | Categoría de Meta. Valores: `utility`, `marketing`, `authentication`. Los recordatorios deben ser `utility` (se fuerza al despachar). |
+| language | VARCHAR(10) | Sí | Código de idioma (Meta). `DEFAULT 'es'`. |
+| body_template | TEXT | Sí | Cuerpo de la plantilla con placeholders contiguos `{{1}}…{{N}}`. CHECK no vacío (`chk_message_templates_body_non_empty`). |
+| sample_variables | JSONB | Sí | Contenido de ejemplo para Meta. `DEFAULT '{}'::jsonb`. |
+| status | template_status | Sí | Estado del ciclo de vida con Meta. Valores: `draft`, `submitted`, `approved`, `rejected`, `paused`. `DEFAULT 'draft'`. |
+| provider_template_id | VARCHAR(255) | No | ID de la plantilla en Meta; NULL hasta el submit. |
+| provider_status | VARCHAR(50) | No | Espejo del estado crudo de Meta (p. ej. `IN_APPROVAL`, `APPROVED`). |
+| is_active | BOOLEAN | Sí | Habilita/deshabilita despachos. `DEFAULT true`. La desactivación bloquea nuevos envíos sin borrar la fila. |
+| created_by_user_id | UUID | No | [FK → users.id] Usuario que creó la plantilla; NULL = sistema. |
+| created_at | TIMESTAMPTZ | Sí | Fecha de creación. `DEFAULT now()`. |
+| updated_at | TIMESTAMPTZ | Sí | Última modificación. `DEFAULT now()`. |
+
+## whatsapp_dispatches
+
+Despachos de mensajes de plantilla (oficina/admin). `payload` guarda SOLO las variables resueltas (no-PII); `phone` es la instantánea canónica al despachar. `dedupe_key` (UNIQUE) impide duplicados: dos despachos idénticos concurrentes → uno solo, el segundo responde 409. Máquina de estados: `queued → sent → delivered|read` (terminales de éxito) y `sent → failed` (reintentable); `failed → queued → sent` en el reintento manual. `send_attempts` cuenta el intento inicial (1) y cada reintento; con 3 intentos consumidos el retry responde 409.
+
+| Elemento | Tipo de Dato | Requerido | Descripción |
+|---|---|---|---|
+| id | UUID | Sí | [PK] Identificador del despacho. `DEFAULT gen_random_uuid()`. |
+| patient_id | UUID | Sí | [FK → patients.id] Paciente destinatario. |
+| template_id | UUID | Sí | [FK → message_templates.id] Plantilla enviada. |
+| status | dispatch_status | Sí | Estado del envío. Valores: `queued`, `sent`, `delivered`, `read`, `failed`. `DEFAULT 'queued'`. |
+| send_attempts | SMALLINT | Sí | Intentos de envío realizados, 0–3. CHECK `send_attempts >= 0 AND send_attempts <= 3` (`chk_whatsapp_dispatches_send_attempts_range`). El primer envío cuenta como intento 1; el retry se rechaza con 409 al llegar a 3. |
+| provider_message_id | VARCHAR(255) | No | wamid devuelto por Meta. UNIQUE; NULL hasta que se envía. CHECK: `queued` no puede tener wamid (`chk_whatsapp_dispatches_queued_has_no_wamid`). |
+| provider_error | TEXT | No | Detalle del fallo del proveedor (truncado). Nunca se espeja en auditoría. |
+| payload | JSONB | Sí | Variables resueltas únicamente (no-PII). `DEFAULT '{}'::jsonb`. |
+| phone | VARCHAR(50) | Sí | Instantánea canónica del teléfono al momento del despacho. |
+| dedupe_key | TEXT | No | Clave técnica de deduplicación (D1): `sha256(patient_id ‖ template_id ‖ created_by_user_id ‖ variables canónicas)`. UNIQUE; despacho idéntico duplicado → 23505 → 409. |
+| created_by_user_id | UUID | No | [FK → users.id] Usuario que despachó (oficina/admin); NULL = sistema (bot). |
+| created_at | TIMESTAMPTZ | Sí | Fecha de creación. `DEFAULT now()`. |
+| updated_at | TIMESTAMPTZ | Sí | Última modificación. `DEFAULT now()`. |
+| sent_at | TIMESTAMPTZ | No | Fecha/hora del envío efectivo; NULL hasta el primer intento. |
+
+## bot_conversations
+
+Conversaciones del bot. UNIQUE `wa_id`: una sola conversación por número. `state` avanza `unidentified → awaiting_document → identified`; al identificar se fija `patient_id` (CHECK `state_matches_patient`). Bloqueo suave: `failed_attempts` cuenta fallos de identificación (0–3, CHECK) y `lockout_until` marca 24h de bloqueo al llegar a 3; al expirar el bloqueo, `failed_attempts` se reinicia antes del siguiente intento (máx. 3 fallos por ventana de 24h, nunca bloqueo permanente). `last_activity_at` define la ventana CSW de 24h (dentro: respuesta de texto libre; fuera: solo plantilla `utility` aprobada).
+
+| Elemento | Tipo de Dato | Requerido | Descripción |
+|---|---|---|---|
+| id | UUID | Sí | [PK] Identificador de la conversación. `DEFAULT gen_random_uuid()`. |
+| wa_id | VARCHAR(50) | Sí | Número de WhatsApp del paciente (identidad, normalizado). UNIQUE: una conversación por número. |
+| patient_id | UUID | No | [FK → patients.id] Paciente identificado; NULL mientras la conversación no está identificada (CHECK `state_matches_patient`). |
+| state | bot_conversation_state | Sí | Estado de la conversación. Valores: `unidentified`, `awaiting_document`, `identified`. `DEFAULT 'unidentified'`. |
+| failed_attempts | SMALLINT | Sí | Intentos fallidos de identificación, 0–3. CHECK (`chk_bot_conversations_failed_attempts_range`). |
+| lockout_until | TIMESTAMPTZ | No | Bloqueo suave de 24h tras 3 fallos; NULL = sin bloqueo. CHECK (`chk_bot_conversations_lockout_requires_failures`). |
+| last_activity_at | TIMESTAMPTZ | Sí | Última actividad (por mensaje entrante). `DEFAULT now()`. Define la ventana CSW de 24h. |
+| started_at | TIMESTAMPTZ | Sí | Creación de la conversación. `DEFAULT now()`. |
+| ended_at | TIMESTAMPTZ | No | Cierre explícito; NULL hasta que exista la funcionalidad. |
+
+## bot_messages
+
+Historial de mensajes del bot (append-only). Cada mensaje se persiste en la MISMA transacción que su entrada de auditoría. `provider_message_id` UNIQUE: dedupe de entregas duplicadas del webhook. `type` es `VARCHAR + CHECK` (no enum: la lista de 5 tipos PG es fija) y `intent` valida el vocabulario del menú (`saldo`, `cuotas`, `proxima`).
+
+| Elemento | Tipo de Dato | Requerido | Descripción |
+|---|---|---|---|
+| id | UUID | Sí | [PK] Identificador del mensaje. `DEFAULT gen_random_uuid()`. |
+| conversation_id | UUID | Sí | [FK → bot_conversations.id] Conversación a la que pertenece. |
+| direction | bot_direction | Sí | Dirección. Valores: `inbound`, `outbound`. |
+| body | TEXT | Sí | Texto del mensaje (entrante o respuesta renderizada). |
+| provider_message_id | VARCHAR(255) | No | wamid. UNIQUE (dedupe de entregas duplicadas); NULL si el envío falló. |
+| type | VARCHAR(10) | Sí | Tipo. Valores: `text`, `template` (CHECK `chk_bot_messages_type_valid`). `DEFAULT 'text'`. |
+| template_id | UUID | No | [FK → message_templates.id] Plantilla usada en envíos de plantilla; NULL en texto libre. CHECK `template_requires_template_type`: `type = 'template'` exige `template_id`. |
+| intent | VARCHAR(20) | No | Intención detectada. Valores: `saldo`, `cuotas`, `proxima` (CHECK `chk_bot_messages_intent_valid`); NULL = sin intención. |
+| metadata | JSONB | Sí | Datos operacionales, p. ej. `{"status": "sent"|"failed", "error": …}`. `DEFAULT '{}'::jsonb`. |
+| created_at | TIMESTAMPTZ | Sí | Fecha del mensaje (append-only). `DEFAULT now()`. |
+
 ---
 
 ## Índices
@@ -207,6 +282,11 @@ Bitácora de auditoría, de solo escritura (append-only). `record_id` es polimó
 | idx_payments_recorded_by_user_id | payments | recorded_by_user_id | B-tree |
 | idx_audit_logs_user_id | audit_logs | user_id | B-tree |
 | idx_audit_logs_created_at | audit_logs | created_at | B-tree |
+| idx_whatsapp_dispatches_status | whatsapp_dispatches | status | B-tree |
+| idx_whatsapp_dispatches_patient_id | whatsapp_dispatches | patient_id | B-tree |
+| idx_whatsapp_dispatches_created_at | whatsapp_dispatches | created_at | B-tree |
+| idx_bot_conversations_patient_id | bot_conversations | patient_id | B-tree |
+| idx_bot_messages_conversation_id | bot_messages | conversation_id | B-tree |
 
 ---
 
