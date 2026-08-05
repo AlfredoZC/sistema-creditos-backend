@@ -1,9 +1,10 @@
 schema: spec-driven
 
 context: |
-  Tech stack: NestJS 10 (Express platform), TypeScript 5.1, TypeORM 0.3 + PostgreSQL
-  Architecture: feature modules (auth, profile, seed, cloudinary, common) with module/controller/service, entities/, dto/ (class-validator + barrel index.ts), guards/strategies/decorators in auth, Swagger at /api
-  Testing: Jest 29 + ts-jest (unit, src/**/*.spec.ts), supertest (e2e, test/), coverage via jest --coverage
+  Tech stack: NestJS 10 (Express platform), TypeScript 5.1, TypeORM 0.3 + PostgreSQL, JWT auth (passport-jwt, @nestjs/jwt, bcrypt), class-validator/class-transformer, Swagger at /api, Cloudinary uploads, decimal.js for money math
+  Architecture: feature modules (auth single-role, profile, seed, cloudinary, common, patients, doctors, surgery-catalog, surgeries, payment-plans, payment-methods, payments, audit) with module/controller/service, entities/, dto/ (class-validator + barrel index.ts), strategies/validators/transformers/enums under feature dirs, TypeORM migrations in src/database/ with data-source.ts
+  Testing: Jest 29 + ts-jest (unit, src/**/*.spec.ts), deterministic integration suite via npm run test:integration (jest --runInBand), supertest (e2e, test/jest-e2e.json), coverage via npm run test:cov
+  Migrations: typeorm-ts-node-commonjs -d src/database/data-source.ts (create/generate/run/revert/show)
   Style: ESLint + Prettier, conventional commits, no AI attribution in commits, README/docs in Spanish
 
 strict_tdd: true
@@ -12,7 +13,7 @@ testing:
   strict_tdd: true
   test_command: "npm test"
   unit: "npm test"
-  integration: "npm run test:e2e"
+  integration: "npm run test:integration"
   e2e: "npm run test:e2e"
   coverage: "npm run test:cov"
   coverage_threshold: 0
