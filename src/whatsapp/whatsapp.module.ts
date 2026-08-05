@@ -10,6 +10,7 @@ import { DispatchesController } from './dispatches.controller';
 import { DispatchesService } from './dispatches.service';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates/templates.service';
+import { WebhookSignatureService } from './webhook-signature.service';
 
 // Re-exported for module-level consumers (specs, later slices); services
 // inject it from the leaf token file to avoid circular imports.
@@ -34,6 +35,7 @@ import { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
   providers: [
     TemplatesService,
     DispatchesService,
+    WebhookSignatureService,
     {
       provide: WHATSAPP_PROVIDER,
       useFactory: createProvider,
