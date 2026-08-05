@@ -48,6 +48,32 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
+ * Maps Meta template events (design §5.1 `provider_status` raw mirror:
+ * IN_APPROVAL/APPROVED/REJECTED/PAUSED/…) to template statuses. Case
+ * insensitive; events with no mapping (IN_APPEAL, PENDING_DELETION,
+ * DISABLED, …) return null so the webhook can answer 200 no-op — the mirror
+ * NEVER throws on an unknown provider status (task 4.3 re-scope, webhook
+ * §9.3 item 3). Pure — no side effects.
+ */
+export function mapProviderStatusToTemplateStatus(
+  providerStatus: string,
+): TemplateStatus | null {
+  const normalized = providerStatus.toUpperCase();
+  switch (normalized) {
+    case 'IN_APPROVAL':
+      return TemplateStatus.SUBMITTED;
+    case 'APPROVED':
+      return TemplateStatus.APPROVED;
+    case 'REJECTED':
+      return TemplateStatus.REJECTED;
+    case 'PAUSED':
+      return TemplateStatus.PAUSED;
+    default:
+      return null;
+  }
+}
+
+/**
  * Template CRUD (task 2.2 scope, design §9.1). Create always persists a
  * `draft` row (+ audit `whatsapp_template.created`); submission through the
  * provider and status mirroring land in a later slice. Audit payloads carry
@@ -230,6 +256,60 @@ export class TemplatesService {
         recordId: saved.id,
         previousData,
         newData: { isActive: saved.isActive },
+      });
+      return saved;
+    });
+  }
+
+  /**
+   * Provider status mirroring for the public webhook (design §9.1 item 3,
+   * task 4.3 re-scope). Minimal webhook-required contract — NOT the full 2.4
+   * lifecycle scope, which stays pending for its template-lifecycle spec.
+   *
+   * Contract: finds the template by `provider_template_id`; maps the provider
+   * status via {@link mapProviderStatusToTemplateStatus}; applies the
+   * transition ONLY when it is allowed by the immutable transition map
+   * (submitted→approved/rejected, draft→submitted, …). Idempotent: a repeat of
+   * the current status is a no-op with no audit. Unknown provider statuses,
+   * unknown template ids, and non-allowed (regressive) transitions are all
+   * silent no-ops — this method NEVER throws, so the webhook always answers
+   * 200 fast. The raw provider status is mirrored into `provider_status` on an
+   * effective change; the audit carries only operational fields (AD9) with
+   * userId null (system event).
+   *
+   * @returns the updated template, or null when nothing was applied.
+   */
+  async mirrorProviderStatus(
+    providerTemplateId: string,
+    providerStatus: string,
+  ): Promise<MessageTemplate | null> {
+    const existing = await this.templateRepository.findOne({
+      where: { providerTemplateId },
+    });
+    if (!existing) return null;
+
+    const mapped = mapProviderStatusToTemplateStatus(providerStatus);
+    if (mapped === null || mapped === existing.status) {
+      return existing;
+    }
+    if (!ALLOWED_STATUS_TRANSITIONS[existing.status].includes(mapped)) {
+      // Regression guard: an out-of-order provider event (e.g. APPROVED
+      // arriving for a draft) must not move the template backwards.
+      return existing;
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const previousStatus = existing.status;
+      existing.status = mapped;
+      existing.providerStatus = providerStatus;
+      const saved = await manager.save(existing);
+      await this.auditService.log(manager, {
+        userId: null,
+        action: AUDIT_ACTION_TEMPLATE_STATUS_CHANGED,
+        tableName: AUDIT_TABLE_MESSAGE_TEMPLATES,
+        recordId: saved.id,
+        previousData: { status: previousStatus },
+        newData: { status: saved.status, providerStatus: saved.providerStatus },
       });
       return saved;
     });
