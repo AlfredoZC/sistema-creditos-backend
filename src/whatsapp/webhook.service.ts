@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { DispatchStatus } from '../common/enums';
+import { BotService } from './bot.service';
 import { WhatsAppDispatch } from './entities';
 import { TemplatesService } from './templates/templates.service';
 import { WebhookSignatureService } from './webhook-signature.service';
@@ -94,6 +95,7 @@ export class WebhookService {
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly botService: BotService,
   ) {}
 
   /**
@@ -143,7 +145,7 @@ export class WebhookService {
 
     const payload = this.parsePayload(rawBody);
     await this.processStatuses(this.collectArray(payload, 'statuses'));
-    this.processInboundSeam(this.collectArray(payload, 'messages'));
+    await this.processInboundMessages(this.collectArray(payload, 'messages'));
     await this.processTemplateStatusUpdates(payload);
   }
 
@@ -220,17 +222,32 @@ export class WebhookService {
   }
 
   /**
-   * Inbound message seam (task 4.3 re-scope, Phase 5): `bot.service` does not
-   * exist yet (task 5.4), so the webhook answers 200 fast and persists
-   * nothing. When 5.4 lands this hook is replaced with
-   * `botService.processInbound(waId, messageId, body, timestamp)` (design
-   * §9.3 item 2 / §9.4); inbound duplicate-delivery dedupe (bot_messages
-   * provider_message_id UNIQUE) is covered by the 5.5 bot spec — this slice
-   * creates NO bot entities.
+   * Inbound messages (design §9.3 item 2 / §9.4): each `messages[]` entry is
+   * handed to BotService.processInbound(waId, messageId, body, timestamp)
+   * — the conversational bot's entry point (task 5.4). Malformed entries
+   * (missing from/id/body) are skipped; bot-level duplicate-delivery dedupe
+   * (bot_messages.provider_message_id UNIQUE) answers 200 silently — AD6.
+   * The Meta epoch-seconds `timestamp` drives the bot's CSW-window and
+   * lockout decisions, so it is passed through untouched.
    */
-  private processInboundSeam(messages: unknown[]): void {
-    // TODO(5.4): wire bot.service.processInbound — see tasks.md 4.3 re-scope note.
-    void messages;
+  private async processInboundMessages(messages: unknown[]): Promise<void> {
+    for (const message of messages) {
+      if (!isRecord(message)) continue;
+      const waId = message['from'];
+      const messageId = message['id'];
+      const body = isRecord(message['text']) ? message['text']['body'] : undefined;
+      if (typeof waId !== 'string' || typeof messageId !== 'string') {
+        continue;
+      }
+      const timestamp =
+        typeof message['timestamp'] === 'string' ? message['timestamp'] : undefined;
+      await this.botService.processInbound(
+        waId,
+        messageId,
+        typeof body === 'string' ? body : '',
+        timestamp,
+      );
+    }
   }
 
   /**

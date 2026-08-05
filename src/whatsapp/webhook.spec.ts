@@ -12,6 +12,8 @@ import {
   getTestWebhookVerifyToken,
 } from '../test-utils/whatsapp-webhook-client';
 import { MockWhatsAppProvider } from './provider/mock-whatsapp-provider';
+import { FREE_FORM_TEXT_SEND_TEMPLATE_NAME } from './bot.service';
+import { normalizePhone } from './phone-normalizer';
 import {
   isEffectiveDispatchTransition,
   mapProviderStatusToDispatchStatus,
@@ -30,11 +32,12 @@ jest.setTimeout(60000);
  * "Out-of-order status does not regress", plus the template-status mirror
  * (task 4.3 re-scope: minimal mirrorProviderStatus, NOT the full 2.4 scope).
  *
- * RE-SCOPE (documented in tasks.md 4.3/4.5): the inbound `messages[]` path is
- * a 200-fast seam — bot.service.processInbound (task 5.4) does not exist yet,
- * so nothing is persisted for inbound messages. The inbound duplicate-delivery
- * dedupe scenario (bot_messages.provider_message_id UNIQUE) lands in the 5.5
- * bot spec; this slice creates NO bot entities.
+ * INBOUND WIRING (task 5.4): the `messages[]` path routes every entry into
+ * BotService.processInbound (design §9.3 item 2 / §9.4) — the webhook stays
+ * 200-fast and bot-level duplicate-delivery dedupe
+ * (bot_messages.provider_message_id UNIQUE) is silent (AD6). The full bot
+ * state-machine scenario coverage lives in bot.service.spec (tasks 5.3–5.4)
+ * and the 5.5 bot spec.
  */
 
 // Unique data per run: user/patient rows are shared with other integration
@@ -48,6 +51,10 @@ const AUDIT_TEMPLATE_STATUS_CHANGED = 'whatsapp_template.status_changed';
 
 function uniqueIdentityDocument(): string {
   return `${RUN_SUFFIX}${uniqueCounter++}`.slice(-20);
+}
+
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 // patients.phone is UNIQUE (migration 002) and patient rows are shared with
@@ -543,7 +550,7 @@ describe('Webhook POST statuses[] (spec "Webhook Status and Inbound Processing")
   });
 });
 
-describe('Webhook POST messages[] (inbound seam — task 4.3 re-scope)', () => {
+describe('Webhook POST messages[] (inbound bot wiring — task 5.4)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let provider: MockWhatsAppProvider;
@@ -561,12 +568,46 @@ describe('Webhook POST messages[] (inbound seam — task 4.3 re-scope)', () => {
 
   beforeEach(async () => {
     await dataSource.query(
-      'TRUNCATE TABLE whatsapp_dispatches, message_templates RESTART IDENTITY CASCADE',
+      `TRUNCATE TABLE bot_messages, bot_conversations, whatsapp_dispatches,
+       message_templates RESTART IDENTITY CASCADE`,
     );
     provider.sent.length = 0;
   });
 
-  it('answers 200 fast and persists NOTHING until bot.service lands (dedupe scenario deferred to 5.5)', async () => {
+  interface ConversationRow {
+    id: string;
+    waId: string;
+    state: string;
+  }
+
+  interface MessageRow {
+    id: string;
+    body: string;
+    direction: string;
+    providerMessageId: string;
+  }
+
+  async function findConversation(waId: string): Promise<ConversationRow | undefined> {
+    const rows: ConversationRow[] = await dataSource.query(
+      `SELECT id, wa_id AS "waId", state
+         FROM bot_conversations
+        WHERE wa_id = $1`,
+      [waId],
+    );
+    return rows[0];
+  }
+
+  async function messagesFor(conversationId: string): Promise<MessageRow[]> {
+    return dataSource.query(
+      `SELECT id, body, direction, provider_message_id AS "providerMessageId"
+         FROM bot_messages
+        WHERE conversation_id = $1
+        ORDER BY created_at`,
+      [conversationId],
+    );
+  }
+
+  function signedInboundPost(messages: unknown[]): request.Test {
     const rawBody = JSON.stringify({
       object: 'whatsapp_business_account',
       entry: [
@@ -575,45 +616,100 @@ describe('Webhook POST messages[] (inbound seam — task 4.3 re-scope)', () => {
           changes: [
             {
               field: 'messages',
-              value: {
-                messaging_product: 'whatsapp',
-                messages: [
-                  { from: '+59170000001', id: 'wamid.inbound.1', text: { body: 'saldo' } },
-                ],
-              },
+              value: { messaging_product: 'whatsapp', messages },
             },
           ],
         },
       ],
     });
-
-    const auditCountBefore: { count: string }[] = await dataSource.query(
-      'SELECT COUNT(*)::text AS count FROM audit_logs',
-    );
-
-    const response = await buildSignedWebhookPost(
+    return buildSignedWebhookPost(
       app,
       WEBHOOK_PATH,
       rawBody,
       getTestWebhookAppSecret(),
     );
+  }
+
+  it('routes an inbound message into the bot: conversation, message row, and reply, all with a 200 (design §9.3 item 2)', async () => {
+    const phone = uniquePhone();
+    await dataSource.query(
+      `INSERT INTO patients (identity_document, first_name, paternal_last_name, phone)
+       VALUES ($1, 'Webhook', 'Bot', $2)`,
+      [uniqueIdentityDocument(), phone],
+    );
+    const canonical = normalizePhone(phone);
+
+    const response = await signedInboundPost([
+      {
+        from: canonical,
+        id: 'wamid.inbound.1',
+        timestamp: String(nowSeconds()),
+        text: { body: 'saldo' },
+      },
+    ]);
 
     expect(response.status).toBe(200);
-    // The seam must not create bot rows (no bot entities in this slice),
-    // must not touch dispatches/templates, must not audit, and must not
-    // trigger provider sends.
-    const dispatchRows: { count: string }[] = await dataSource.query(
-      'SELECT COUNT(*)::text AS count FROM whatsapp_dispatches',
+
+    // The bot identified the single phone match and replied with the menu.
+    const conversation = await findConversation(canonical);
+    expect(conversation?.state).toBe('identified');
+
+    const messages = await messagesFor(conversation!.id);
+    expect(messages).toHaveLength(2);
+    expect(messages[0].direction).toBe('inbound');
+    expect(messages[0].body).toBe('saldo');
+    expect(messages[0].providerMessageId).toBe('wamid.inbound.1');
+    expect(messages[1].direction).toBe('outbound');
+
+    // The reply went through the provider (free-form marker, AD5-after-commit).
+    expect(provider.sent).toHaveLength(1);
+    expect(provider.sent[0].input.to).toBe(canonical);
+    expect(provider.sent[0].input.templateName).toBe(
+      FREE_FORM_TEXT_SEND_TEMPLATE_NAME,
     );
-    const templateRows: { count: string }[] = await dataSource.query(
-      'SELECT COUNT(*)::text AS count FROM message_templates',
+  });
+
+  it('answers 200 for a duplicate delivery: bot dedupe keeps one inbound row and one reply (spec "Duplicate delivery ignored")', async () => {
+    const phone = uniquePhone();
+    await dataSource.query(
+      `INSERT INTO patients (identity_document, first_name, paternal_last_name, phone)
+       VALUES ($1, 'Webhook', 'Bot', $2)`,
+      [uniqueIdentityDocument(), phone],
     );
-    const auditCountAfter: { count: string }[] = await dataSource.query(
-      'SELECT COUNT(*)::text AS count FROM audit_logs',
+    const canonical = normalizePhone(phone);
+    const inboundMessage = {
+      from: canonical,
+      id: 'wamid.inbound.2',
+      timestamp: String(nowSeconds()),
+      text: { body: 'hola' },
+    };
+
+    const first = await signedInboundPost([inboundMessage]);
+    const second = await signedInboundPost([inboundMessage]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    const conversation = await findConversation(canonical);
+    expect(conversation?.state).toBe('identified');
+    const messages = await messagesFor(conversation!.id);
+    expect(messages.filter((row) => row.direction === 'inbound')).toHaveLength(1);
+    expect(messages.filter((row) => row.direction === 'outbound')).toHaveLength(1);
+    expect(provider.sent).toHaveLength(1);
+  });
+
+  it('skips malformed entries and answers 200 without touching the bot', async () => {
+    const response = await signedInboundPost([
+      { from: '+59170000001' }, // no id / text
+      { id: 'wamid.inbound.3' }, // no from / text
+      'not-an-object',
+    ]);
+
+    expect(response.status).toBe(200);
+    const rows: { count: string }[] = await dataSource.query(
+      'SELECT COUNT(*)::text AS count FROM bot_conversations',
     );
-    expect(dispatchRows[0].count).toBe('0');
-    expect(templateRows[0].count).toBe('0');
-    expect(auditCountAfter[0].count).toBe(auditCountBefore[0].count);
+    expect(rows[0].count).toBe('0');
     expect(provider.sent).toHaveLength(0);
   });
 });
