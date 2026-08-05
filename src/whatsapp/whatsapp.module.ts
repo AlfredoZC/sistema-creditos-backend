@@ -6,16 +6,14 @@ import { AuditModule } from '../audit/audit.module';
 import { PaymentPlansModule } from '../payment-plans/payment-plans.module';
 import { MessageTemplate, WhatsAppDispatch } from './entities';
 import { createProvider } from './provider/whatsapp-provider.factory';
+import { DispatchesService } from './dispatches.service';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates/templates.service';
 
-/**
- * Injection token for the WhatsApp provider port (design AD1). The factory
- * (design §7) selects MockWhatsAppProvider or MetaCloudApiProvider from
- * WHATSAPP_PROVIDER and fails fast on unknown values; with 'mock' the Meta
- * adapter is never constructed (spec "Mock provider isolation").
- */
-export const WHATSAPP_PROVIDER = Symbol('WHATSAPP_PROVIDER');
+// Re-exported for module-level consumers (specs, later slices); services
+// inject it from the leaf token file to avoid circular imports.
+export { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
+import { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
 
 /**
  * WhatsApp feature module (design §3). Hosts the template lifecycle
@@ -34,6 +32,7 @@ export const WHATSAPP_PROVIDER = Symbol('WHATSAPP_PROVIDER');
   controllers: [TemplatesController],
   providers: [
     TemplatesService,
+    DispatchesService,
     {
       provide: WHATSAPP_PROVIDER,
       useFactory: createProvider,
