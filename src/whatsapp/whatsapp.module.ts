@@ -6,6 +6,7 @@ import { AuditModule } from '../audit/audit.module';
 import { PaymentPlansModule } from '../payment-plans/payment-plans.module';
 import { MessageTemplate, WhatsAppDispatch } from './entities';
 import { createProvider } from './provider/whatsapp-provider.factory';
+import { DispatchesController } from './dispatches.controller';
 import { DispatchesService } from './dispatches.service';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates/templates.service';
@@ -29,7 +30,7 @@ import { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PaymentPlansModule,
   ],
-  controllers: [TemplatesController],
+  controllers: [TemplatesController, DispatchesController],
   providers: [
     TemplatesService,
     DispatchesService,

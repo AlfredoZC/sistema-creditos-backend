@@ -9,11 +9,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
-import {
-  DispatchStatus,
-  TemplateStatus,
-} from '../common/enums';
+import { DispatchStatus, TemplateStatus } from '../common/enums';
 import { handleDatabaseError } from '../common/errors';
+import { PaginationDto } from '../common/dtos/pagination.dto';
 import { normalizePhone } from './phone-normalizer';
 import { truncateErrorMessage } from './provider/provider-errors';
 import {
@@ -138,9 +136,7 @@ export class DispatchesService {
     userId: string | null = null,
   ): Promise<WhatsAppDispatch> {
     const template = await this.requireDispatchableTemplate(input.templateId);
-    const placeholderNumbers = extractPlaceholderNumbers(
-      template.bodyTemplate,
-    );
+    const placeholderNumbers = extractPlaceholderNumbers(template.bodyTemplate);
     assertVariablesMatchPlaceholders(placeholderNumbers, input.variables);
     const phoneSnapshot = await this.patientPhoneSnapshot(input.patientId);
 
@@ -232,6 +228,38 @@ export class DispatchesService {
   }
 
   /**
+   * Status tracking list (design §9.2, task 3.3): the shared PaginationDto
+   * envelope used by doctors/patients ({ data, total, limit, offset }) with
+   * an optional dispatch_status filter. The status value is validated by the
+   * controller's ParseEnumPipe before this method runs.
+   */
+  async findAll(
+    filters: { status?: DispatchStatus } = {},
+    pagination: PaginationDto = {},
+  ): Promise<{
+    data: WhatsAppDispatch[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const { limit = 10, offset = 0 } = pagination;
+    const [data, total] = await this.dispatchRepository.findAndCount({
+      where: {
+        ...(filters.status !== undefined ? { status: filters.status } : {}),
+      },
+      take: limit,
+      skip: offset,
+    });
+    return { data, total, limit, offset };
+  }
+
+  async findOne(id: string): Promise<WhatsAppDispatch> {
+    const dispatch = await this.dispatchRepository.findOne({ where: { id } });
+    if (!dispatch) throw new NotFoundException('Dispatch not found');
+    return dispatch;
+  }
+
+  /**
    * The provider call (AD5): always AFTER the business transaction commits.
    * Success routes the row to 'sent' with the wamid and sent_at; any provider
    * failure routes it to 'failed' with a truncated provider_error — never
@@ -306,10 +334,7 @@ export class DispatchesService {
       where: { id: templateId },
     });
     if (!template) throw new NotFoundException('Template not found');
-    if (
-      template.status !== TemplateStatus.APPROVED ||
-      !template.isActive
-    ) {
+    if (template.status !== TemplateStatus.APPROVED || !template.isActive) {
       throw new ConflictException(
         'Template is not dispatchable (must be approved and active)',
       );
