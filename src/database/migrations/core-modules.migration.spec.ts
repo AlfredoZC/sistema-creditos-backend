@@ -225,10 +225,11 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('migrates a fresh database cleanly from Init', async () => {
+    // 4 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot.
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(3);
+    expect(applied[0].count).toBe(4);
 
     for (const tableName of Object.keys(EXPECTED_TABLE_COLUMNS)) {
       if (tableName === 'payment_methods') {
