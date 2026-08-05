@@ -205,6 +205,36 @@ export class TemplatesService {
     }
   }
 
+  /**
+   * Deactivation (design §9.1): sets `is_active=false` — blocks new dispatches
+   * (dispatch gate), never deletes the row. Idempotent: an already-inactive
+   * template is returned unchanged without a new audit. The audit carries only
+   * the operational isActive field (AD9).
+   */
+  async deactivate(
+    id: string,
+    userId: string | null = null,
+  ): Promise<MessageTemplate> {
+    const existing = await this.templateRepository.findOne({ where: { id } });
+    if (!existing) throw new NotFoundException('Template not found');
+    if (!existing.isActive) return existing;
+
+    return this.dataSource.transaction(async (manager) => {
+      const previousData = { isActive: existing.isActive };
+      existing.isActive = false;
+      const saved = await manager.save(existing);
+      await this.auditService.log(manager, {
+        userId,
+        action: AUDIT_ACTION_TEMPLATE_UPDATED,
+        tableName: AUDIT_TABLE_MESSAGE_TEMPLATES,
+        recordId: saved.id,
+        previousData,
+        newData: { isActive: saved.isActive },
+      });
+      return saved;
+    });
+  }
+
   private assertAllowedTransition(
     from: TemplateStatus,
     to: TemplateStatus,

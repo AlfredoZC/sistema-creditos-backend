@@ -6,6 +6,7 @@ import { AuditModule } from '../audit/audit.module';
 import { PaymentPlansModule } from '../payment-plans/payment-plans.module';
 import { MessageTemplate } from './entities';
 import { createProvider } from './provider/whatsapp-provider.factory';
+import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates/templates.service';
 
 /**
@@ -18,9 +19,9 @@ export const WHATSAPP_PROVIDER = Symbol('WHATSAPP_PROVIDER');
 
 /**
  * WhatsApp feature module (design §3). Hosts the template lifecycle
- * (TemplatesService) and, in later slices, dispatch/webhook/bot services and
- * controllers. Imports PaymentPlansModule so the bot's patient-scoped debt
- * read is reachable without module cycles (design §10).
+ * (TemplatesService + TemplatesController) and, in later slices, the
+ * dispatch/webhook/bot services. Imports PaymentPlansModule so the bot's
+ * patient-scoped debt read is reachable without module cycles (design §10).
  */
 @Module({
   imports: [
@@ -30,6 +31,7 @@ export const WHATSAPP_PROVIDER = Symbol('WHATSAPP_PROVIDER');
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PaymentPlansModule,
   ],
+  controllers: [TemplatesController],
   providers: [
     TemplatesService,
     {
