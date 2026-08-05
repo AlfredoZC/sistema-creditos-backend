@@ -4,7 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { PaymentPlansModule } from '../payment-plans/payment-plans.module';
-import { MessageTemplate } from './entities';
+import { MessageTemplate, WhatsAppDispatch } from './entities';
 import { createProvider } from './provider/whatsapp-provider.factory';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates/templates.service';
@@ -26,7 +26,7 @@ export const WHATSAPP_PROVIDER = Symbol('WHATSAPP_PROVIDER');
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([MessageTemplate]),
+    TypeOrmModule.forFeature([MessageTemplate, WhatsAppDispatch]),
     AuditModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PaymentPlansModule,
