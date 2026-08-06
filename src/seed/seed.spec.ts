@@ -22,14 +22,15 @@ interface CountRow {
   count: number;
 }
 
-describe('seed (single-role users, design section 9)', () => {
+describe('seed (whole-system demo data, design section 9)', () => {
   let dataSource: DataSource;
   let seedService: SeedService;
 
   beforeAll(async () => {
     await ensureFreshMigrationTestDatabase(SEED_TEST_DATABASE);
     // The shared migration-test helper registers no entities; SeedService
-    // needs the User/Profile metadata, so extend its options locally.
+    // uses the User/Profile metadata (other tables go through raw inserts),
+    // so extend its options locally.
     dataSource = new DataSource({
       ...createMigrationTestDataSource(SEED_TEST_DATABASE).options,
       entities: [User, Profile],
@@ -42,19 +43,158 @@ describe('seed (single-role users, design section 9)', () => {
     await dataSource.destroy();
   });
 
-  it('seeds one admin plus a patient/doctor/office mix on the migrated schema', async () => {
-    await seedService.runSeed();
+  async function countRowsIn(table: string): Promise<number> {
+    const rows: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM ${table}`,
+    );
+    return rows[0].count;
+  }
 
-    const rows: RoleCountRow[] = await dataSource.query(
+  it('seeds every business table with deterministic demo data', async () => {
+    const result = await seedService.runSeed();
+    expect(result).toBe('SEED EXECUTED');
+
+    // Users: the classic one-admin/office/doctor/patient mix, untouched.
+    const roleRows: RoleCountRow[] = await dataSource.query(
       'SELECT role, COUNT(*)::int AS count FROM users GROUP BY role ORDER BY role',
     );
-    const countByRole = Object.fromEntries(
-      rows.map((row) => [row.role, row.count]),
+    expect(
+      Object.fromEntries(roleRows.map((row) => [row.role, row.count])),
+    ).toEqual({ admin: 1, doctor: 3, office: 3, patient: 3 });
+
+    // Pinned row counts across the whole system.
+    expect(await countRowsIn('users')).toBe(10);
+    expect(await countRowsIn('profiles')).toBe(6);
+    expect(await countRowsIn('patients')).toBe(6);
+    expect(await countRowsIn('doctors')).toBe(3);
+    expect(await countRowsIn('surgery_catalog')).toBe(5);
+    expect(await countRowsIn('surgeries')).toBe(6);
+    expect(await countRowsIn('surgery_doctors')).toBe(15);
+    expect(await countRowsIn('payment_plans')).toBe(6);
+    expect(await countRowsIn('installments')).toBe(48);
+    expect(await countRowsIn('payments')).toBe(11);
+    expect(await countRowsIn('audit_logs')).toBe(12);
+    expect(await countRowsIn('message_templates')).toBe(4);
+    expect(await countRowsIn('whatsapp_dispatches')).toBe(6);
+    expect(await countRowsIn('bot_conversations')).toBe(5);
+    expect(await countRowsIn('bot_messages')).toBe(10);
+
+    // Exactly one principal surgeon per surgery (partial unique index).
+    const principals: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM surgery_doctors WHERE role = 'principal'`,
     );
-    expect(countByRole).toEqual({ admin: 1, doctor: 3, office: 3, patient: 3 });
+    expect(principals[0].count).toBe(6);
+
+    // French schedule invariant: every plan's installments sum exactly to its
+    // financed_amount (last line absorbs the rounding remainder).
+    const scheduleMismatches: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payment_plans p
+       WHERE p.financed_amount <> (
+         SELECT SUM(i.principal_amount)::numeric(10,2) FROM installments i
+         WHERE i.payment_plan_id = p.id
+       )`,
+    );
+    expect(scheduleMismatches[0].count).toBe(0);
+
+    // Upfront plans: one installment, zero rate, zero interest.
+    const upfrontPlans: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payment_plans WHERE type = 'upfront'`,
+    );
+    expect(upfrontPlans[0].count).toBe(2);
+    const malformedUpfront: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payment_plans
+       WHERE type = 'upfront' AND (installment_count <> 1 OR monthly_interest_rate <> '0.00')`,
+    );
+    expect(malformedUpfront[0].count).toBe(0);
+    const upfrontWithInterest: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM installments i
+       JOIN payment_plans p ON p.id = i.payment_plan_id
+       WHERE p.type = 'upfront' AND i.interest_amount <> '0.00'`,
+    );
+    expect(upfrontWithInterest[0].count).toBe(0);
+
+    // Credit plans always finance a strictly positive remainder.
+    const nonPositiveFinanced: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payment_plans
+       WHERE type = 'credit' AND financed_amount <= 0`,
+    );
+    expect(nonPositiveFinanced[0].count).toBe(0);
+
+    // Installment lifecycle states are exercised.
+    const paidInstallments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM installments WHERE status = 'paid'`,
+    );
+    expect(paidInstallments[0].count).toBe(3);
+    const partialInstallments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM installments WHERE status = 'partial'`,
+    );
+    expect(partialInstallments[0].count).toBe(1);
+    const cancelledInstallments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM installments WHERE status = 'cancelled'`,
+    );
+    expect(cancelledInstallments[0].count).toBe(1);
+
+    // Payments cover all three types and a status mix.
+    const downPayments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payments WHERE type = 'down_payment'`,
+    );
+    expect(downPayments[0].count).toBe(4);
+    const installmentPayments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payments WHERE type = 'installment_payment'`,
+    );
+    expect(installmentPayments[0].count).toBe(6);
+    const amortizations: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payments WHERE type = 'principal_amortization'`,
+    );
+    expect(amortizations[0].count).toBe(1);
+    const pendingPayments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payments WHERE status = 'pending_confirmation'`,
+    );
+    expect(pendingPayments[0].count).toBe(1);
+    const rejectedPayments: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM payments WHERE status = 'rejected'`,
+    );
+    expect(rejectedPayments[0].count).toBe(1);
+
+    // Queued dispatches must never carry a provider_message_id (CHECK).
+    const queuedDispatches: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM whatsapp_dispatches WHERE status = 'queued'`,
+    );
+    expect(queuedDispatches[0].count).toBe(2);
+    const queuedWithMessageId: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM whatsapp_dispatches
+       WHERE status = 'queued' AND provider_message_id IS NOT NULL`,
+    );
+    expect(queuedWithMessageId[0].count).toBe(0);
+
+    // Message templates cover the approval lifecycle.
+    const approvedUtility: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM message_templates
+       WHERE category = 'utility' AND status = 'approved' AND is_active = true`,
+    );
+    expect(approvedUtility[0].count).toBe(1);
+    const drafts: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM message_templates WHERE status = 'draft'`,
+    );
+    expect(drafts[0].count).toBe(1);
+    const submitted: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM message_templates WHERE status = 'submitted'`,
+    );
+    expect(submitted[0].count).toBe(1);
+
+    // Identified bot conversations must reference a patient.
+    const identifiedConversations: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM bot_conversations WHERE state = 'identified'`,
+    );
+    expect(identifiedConversations[0].count).toBe(2);
+    const unlockedLockout: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM bot_conversations
+       WHERE lockout_until IS NULL AND failed_attempts < 3`,
+    );
+    expect(unlockedLockout[0].count).toBe(4);
   });
 
-  it('wipes existing users and profiles FK-safely and reseeds idempotently', async () => {
+  it('wipes existing rows FK-safely and reseeds idempotently', async () => {
     // Precondition: leftover rows from a manual insert must be wiped too.
     const profileRows: { id: number }[] = await dataSource.query(
       `INSERT INTO profiles (gender) VALUES ('No especificado') RETURNING id`,
@@ -67,6 +207,7 @@ describe('seed (single-role users, design section 9)', () => {
 
     await seedService.runSeed();
 
+    // The leftover rows are gone and the deterministic seed totals are stable.
     const userRows: CountRow[] = await dataSource.query(
       'SELECT COUNT(*)::int AS count FROM users',
     );
@@ -75,6 +216,25 @@ describe('seed (single-role users, design section 9)', () => {
     const wipedProfileRows: CountRow[] = await dataSource.query(
       'SELECT COUNT(*)::int AS count FROM profiles',
     );
-    expect(wipedProfileRows[0].count).toBe(0);
+    expect(wipedProfileRows[0].count).toBe(6);
+
+    const leftoverUsers: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM users WHERE email = 'leftover.user@example.com'`,
+    );
+    expect(leftoverUsers[0].count).toBe(0);
+
+    // payment_methods survives the wipe (migration-owned fixture seed).
+    const methodRows: CountRow[] = await dataSource.query(
+      'SELECT COUNT(*)::int AS count FROM payment_methods',
+    );
+    expect(methodRows[0].count).toBe(4);
+
+    // Every other table shows the same totals as the first seed run.
+    expect(await countRowsIn('patients')).toBe(6);
+    expect(await countRowsIn('surgeries')).toBe(6);
+    expect(await countRowsIn('installments')).toBe(48);
+    expect(await countRowsIn('payments')).toBe(11);
+    expect(await countRowsIn('whatsapp_dispatches')).toBe(6);
+    expect(await countRowsIn('bot_messages')).toBe(10);
   });
 });
