@@ -11,6 +11,7 @@ import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
 import { handleDatabaseError } from '../common/errors';
 import { PaginationDto } from '../common/dtos/pagination.dto';
+import { normalizePhone } from '../whatsapp/phone-normalizer';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { LinkUserDto } from './dto/link-user.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
@@ -26,7 +27,12 @@ export class PatientsService {
 
   async create(createPatientDto: CreatePatientDto): Promise<Patient> {
     try {
-      const patient = this.patientRepository.create(createPatientDto);
+      // Canonical Phone Format: the DTO stays a plain string; normalization
+      // happens here at the service boundary (design §6).
+      const patient = this.patientRepository.create({
+        ...createPatientDto,
+        phone: normalizePhone(createPatientDto.phone),
+      });
       return await this.patientRepository.save(patient);
     } catch (error) {
       handleDatabaseError(error);
@@ -59,6 +65,11 @@ export class PatientsService {
       if (!patient) throw new NotFoundException('Patient not found');
       this.assertOwnRecordOrStaff(patient, currentUser);
       Object.assign(patient, updatePatientDto);
+      // Canonical Phone Format at the service boundary: normalize only when a
+      // phone is actually provided for update.
+      if (updatePatientDto.phone !== undefined) {
+        patient.phone = normalizePhone(updatePatientDto.phone);
+      }
       return await this.patientRepository.save(patient);
     } catch (error) {
       if (error instanceof HttpException) throw error;

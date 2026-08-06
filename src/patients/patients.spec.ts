@@ -23,6 +23,25 @@ function uniquePhone(): string {
   return `+5917${RUN_SUFFIX}${uniqueCounter++}`;
 }
 
+// 8-digit national mobiles starting with 7 — exercise the +591-mobile
+// heuristic end-to-end. pid/first, timestamp/last, and counter digits
+// (counter truncated to 2 digits so the total stays exactly 8) keep every
+// value unique per run and within the run on the shared db_creditos_test.
+function uniqueMobile8(): string {
+  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
+  const ts2 = String(Date.now()).slice(-2);
+  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
+  return `7${pid3}${ts2}${seq2}`;
+}
+
+// 8-digit landline (starts with 2) — same uniqueness scheme, heuristic n/a.
+function uniqueLandline8(): string {
+  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
+  const ts2 = String(Date.now()).slice(-2);
+  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
+  return `2${pid3}${ts2}${seq2}`;
+}
+
 function uniqueIdentityDocument(): string {
   return `${ID_DOCUMENT_SUFFIX}${uniqueCounter++}`;
 }
@@ -428,6 +447,90 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
         '00000000-0000-4000-8000-000000000002',
       );
       expect(missingUser.status).toBe(404);
+    });
+  });
+
+  describe('phone canonicalization at the service boundary (Canonical Phone Format)', () => {
+    async function storedPhone(id: string): Promise<string> {
+      const rows: { phone: string }[] = await dataSource.query(
+        'SELECT phone FROM patients WHERE id = $1',
+        [id],
+      );
+      return rows[0].phone;
+    }
+
+    it('stores an 8-digit mobile starting with 6 or 7 in canonical +591 form', async () => {
+      const token = await officeToken();
+      const mobile = uniqueMobile8();
+
+      const response = await createPatient(token, patientBody({ phone: mobile }));
+
+      expect(response.status).toBe(201);
+      expect(response.body.phone).toBe(`+591${mobile}`);
+      expect(await storedPhone(response.body.id as string)).toBe(
+        `+591${mobile}`,
+      );
+    });
+
+    it('stores a 591-prefixed mobile in canonical +591 form (no double prefix)', async () => {
+      const token = await officeToken();
+      const mobile = uniqueMobile8();
+      const input = `591${mobile}`;
+
+      const response = await createPatient(token, patientBody({ phone: input }));
+
+      expect(response.status).toBe(201);
+      expect(response.body.phone).toBe(`+591${mobile}`);
+      expect(await storedPhone(response.body.id as string)).toBe(
+        `+591${mobile}`,
+      );
+    });
+
+    it('stores a landline exactly as provided (heuristic never guesses)', async () => {
+      const token = await officeToken();
+      const landline = uniqueLandline8();
+
+      const response = await createPatient(
+        token,
+        patientBody({ phone: landline }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(response.body.phone).toBe(landline);
+      expect(await storedPhone(response.body.id as string)).toBe(landline);
+    });
+
+    it('stores a foreign number exactly as provided (separators stripped)', async () => {
+      const token = await officeToken();
+      const foreign = `+54 ${uniqueMobile8()}`;
+
+      const response = await createPatient(
+        token,
+        patientBody({ phone: foreign }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(response.body.phone).toBe(foreign.replace(/\s/g, ''));
+      expect(await storedPhone(response.body.id as string)).toBe(
+        foreign.replace(/\s/g, ''),
+      );
+    });
+
+    it('canonicalizes a raw mobile also on update', async () => {
+      const token = await officeToken();
+      const created = await createPatient(token, patientBody());
+      expect(created.status).toBe(201);
+      const mobile = uniqueMobile8();
+
+      const response = await updatePatient(token, created.body.id as string, {
+        phone: mobile,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.phone).toBe(`+591${mobile}`);
+      expect(await storedPhone(created.body.id as string)).toBe(
+        `+591${mobile}`,
+      );
     });
   });
 

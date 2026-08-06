@@ -12,6 +12,7 @@ import {
 } from '../common/enums';
 import { ensureTestDbReady } from '../test-utils/setup-test-db';
 import { buildTestingApp } from '../test-utils/test-app';
+import { PaymentPlansService } from './payment-plans.service';
 
 jest.setTimeout(60000);
 
@@ -1037,6 +1038,192 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+  });
+
+  describe('patient debt summary (design section 10 — service-only read)', () => {
+    let paymentPlansService: PaymentPlansService;
+
+    beforeAll(() => {
+      paymentPlansService = app.get(PaymentPlansService);
+    });
+
+    async function installmentIdFor(
+      planId: string,
+      number: number,
+    ): Promise<string> {
+      const rows: IdRow[] = await dataSource.query(
+        `SELECT id FROM installments
+         WHERE payment_plan_id = $1 AND installment_number = $2`,
+        [planId, number],
+      );
+      return rows[0].id;
+    }
+
+    // Spec scenario "Hybrid patient summary": the schedule is built through
+    // the real FinancingEngine (10 x 1113.27 lines), the delinquent state and
+    // the overdue amount come from a partial office payment (500.00 on
+    // installment 1 -> PARTIAL, overdue 613.27), and the deterministic pins
+    // (same direct-UPDATE convention as the overdue test above) fix the
+    // scenario dates and the tracked outstanding_balance column — which the
+    // read NEVER recomputes (design D4).
+    async function hybridPatientWithPinnedDebt(): Promise<{
+      patientId: string;
+      planId: string;
+    }> {
+      const office = await officeUser();
+      const patientId = await createPatientRaw();
+      const catalog = await createCatalogEntry(office.token);
+      const surgeryId = await createSurgery(
+        office.token,
+        patientId,
+        catalog.id,
+        '10000.00',
+      );
+      const created = await createPlan(office.token, {
+        surgeryId,
+        type: PaymentPlanType.CREDIT,
+        monthlyInterestRate: '2.00',
+        installmentCount: 10,
+        startDate: '2026-01-01',
+      });
+      expect(created.status).toBe(201);
+      const plans = await planRows(surgeryId);
+      const planId = plans[0].id;
+
+      const methodId = await cashMethodId();
+      const payment = await request(app.getHttpServer())
+        .post('/api/payments')
+        .set('Authorization', `Bearer ${office.token}`)
+        .send({
+          paymentPlanId: planId,
+          installmentId: await installmentIdFor(planId, 1),
+          paymentMethodId: methodId,
+          amount: '500.00',
+          type: PaymentType.INSTALLMENT_PAYMENT,
+        });
+      expect(payment.status).toBe(201);
+      expect(payment.body.status).toBe(PaymentStatus.CONFIRMED);
+
+      // Pin the scenario state deterministically (the suite shares
+      // db_creditos_test and the clock moves): installment 1 stays PARTIAL
+      // and overdue; installment 2 becomes the next due (spec pin
+      // 2026-08-05); the rest move far-future so only installment 1 is
+      // overdue.
+      await dataSource.query(
+        `UPDATE installments SET due_date = '2020-01-01'
+         WHERE payment_plan_id = $1 AND installment_number = 1`,
+        [planId],
+      );
+      await dataSource.query(
+        `UPDATE installments SET due_date = '2026-08-05'
+         WHERE payment_plan_id = $1 AND installment_number = 2`,
+        [planId],
+      );
+      await dataSource.query(
+        `UPDATE installments SET due_date = '2999-01-01'
+         WHERE payment_plan_id = $1 AND installment_number >= 3`,
+        [planId],
+      );
+      // outstanding_balance is the platform's tracked column (design D4) —
+      // pin the scenario value 8155.19, the read must return it untouched.
+      await dataSource.query(
+        `UPDATE payment_plans SET outstanding_balance = '8155.19' WHERE id = $1`,
+        [planId],
+      );
+      return { patientId, planId };
+    }
+
+    it('returns the hybrid patient summary with pinned values 8155.19 / 1113.27 / 2026-08-05 / 613.27', async () => {
+      const { patientId } = await hybridPatientWithPinnedDebt();
+
+      const summary = await paymentPlansService.getPatientDebtSummary(
+        patientId,
+      );
+
+      expect(summary).toEqual({
+        outstandingBalance: '8155.19',
+        nextDueInstallment: {
+          installmentNumber: 2,
+          totalAmount: '1113.27',
+          dueDate: '2026-08-05',
+        },
+        overdueTotal: '613.27',
+      });
+    });
+
+    it('returns the zero summary for a patient without a payment plan', async () => {
+      const patientId = await createPatientRaw();
+
+      const summary = await paymentPlansService.getPatientDebtSummary(
+        patientId,
+      );
+
+      expect(summary).toEqual({
+        outstandingBalance: '0.00',
+        nextDueInstallment: null,
+        overdueTotal: '0.00',
+      });
+    });
+
+    it('returns a null next due with the full overdue total when every unpaid installment is past due', async () => {
+      const { patientId, planId } = await hybridPatientWithPinnedDebt();
+      // Move every installment into the past: no future unpaid line remains,
+      // so nextDueInstallment is null while the overdue total still accrues
+      // (613.27 partial #1 + 8 x 1113.27 lines #2..#9 + 1113.22 line #10 —
+      // the last line absorbs the rounding remainder = 10,632.65).
+      await dataSource.query(
+        `UPDATE installments SET due_date = '2020-01-01'
+         WHERE payment_plan_id = $1`,
+        [planId],
+      );
+
+      const summary = await paymentPlansService.getPatientDebtSummary(
+        patientId,
+      );
+
+      expect(summary).toEqual({
+        outstandingBalance: '8155.19',
+        nextDueInstallment: null,
+        overdueTotal: '10632.65',
+      });
+    });
+
+    it('exposes no HTTP surface for the summary while patient own-record reads keep working', async () => {
+      const office = await officeUser();
+      const patient = await patientUser();
+      const patientId = await createPatientRaw(patient.id);
+      const catalog = await createCatalogEntry(office.token);
+      const surgeryId = await createSurgery(
+        office.token,
+        patientId,
+        catalog.id,
+        '6000.00',
+      );
+      const created = await createPlan(office.token, {
+        surgeryId,
+        type: PaymentPlanType.CREDIT,
+        installmentCount: 6,
+      });
+      expect(created.status).toBe(201);
+
+      // Design D4: the read is not exposed as a route of any kind, so any
+      // role gets 404 — there is nothing to authorize (no 403 surface).
+      const route = `/api/payment-plans/${created.body.id as string}/summary`;
+      const patientAttempt = await request(app.getHttpServer())
+        .get(route)
+        .set('Authorization', `Bearer ${patient.token}`);
+      expect(patientAttempt.status).toBe(404);
+      const officeAttempt = await request(app.getHttpServer())
+        .get(route)
+        .set('Authorization', `Bearer ${office.token}`);
+      expect(officeAttempt.status).toBe(404);
+
+      // Existing user-gated reads stay unchanged: the patient still reads
+      // their own plan.
+      const ownPlan = await getPlan(patient.token, created.body.id as string);
+      expect(ownPlan.status).toBe(200);
+      expect(ownPlan.body.id).toBe(created.body.id);
     });
   });
 });

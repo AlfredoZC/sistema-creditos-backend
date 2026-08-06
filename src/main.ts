@@ -4,7 +4,9 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true is REQUIRED for x-hub-signature-256 verification over the
+  // exact request bytes (design AD3) — the webhook verify-then-parses.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const logger = new Logger('Bootstrap');
 

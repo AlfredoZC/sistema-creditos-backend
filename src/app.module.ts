@@ -14,6 +14,7 @@ import { SurgeryCatalogModule } from './surgery-catalog/surgery-catalog.module';
 import { SurgeriesModule } from './surgeries/surgeries.module';
 import { ProfileModule } from './profile/profile.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     SurgeriesModule,
     PaymentMethodsModule,
     PaymentPlansModule,
+    WhatsappModule,
     PaymentsModule,
     SeedModule,
     ProfileModule,

@@ -1,6 +1,6 @@
 # Mapeo ES → EN del Esquema de Base de Datos
 
-Documento de referencia para la traducción del esquema original en español al esquema final en inglés de la plataforma de créditos. La fuente de verdad es el esquema final implementado en las migraciones `1786000000001-AuthSingleRole.ts` y `1786000000002-CoreModules.ts`, con la migración base `1785621997266-Init.ts` como origen de las tablas preexistentes `users` y `profiles`.
+Documento de referencia para la traducción del esquema original en español al esquema final en inglés de la plataforma de créditos. La fuente de verdad es el esquema final implementado en las migraciones `1786000000001-AuthSingleRole.ts`, `1786000000002-CoreModules.ts` y `1786000000003-WhatsAppBot.ts`, con la migración base `1785621997266-Init.ts` como origen de las tablas preexistentes `users` y `profiles`.
 
 **Convenciones de la traducción**
 
@@ -24,10 +24,10 @@ Documento de referencia para la traducción del esquema original en español al 
 | metodo_pago | payment_methods | Implementada (migración 002) |
 | pago | payments | Implementada (migración 002) |
 | auditoria | audit_logs | Implementada (migración 002) |
-| plantilla_mensaje | message_templates | Pendiente (siguiente fase: bot de WhatsApp) |
-| envio_whatsapp | whatsapp_dispatches | Pendiente (siguiente fase: bot de WhatsApp) |
-| conversacion_bot | bot_conversations | Pendiente (siguiente fase: bot de WhatsApp) |
-| mensaje_bot | bot_messages | Pendiente (siguiente fase: bot de WhatsApp) |
+| plantilla_mensaje | message_templates | Implementada (migración 003) |
+| envio_whatsapp | whatsapp_dispatches | Implementada (migración 003) |
+| conversacion_bot | bot_conversations | Implementada (migración 003) |
+| mensaje_bot | bot_messages | Implementada (migración 003) |
 
 ## usuario → users
 
@@ -263,6 +263,114 @@ Documento de referencia para la traducción del esquema original en español al 
 | datos_nuevos | new_data | `JSONB` NULL. |
 | fecha | created_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`. |
 
+## plantilla_mensaje → message_templates
+
+### Tabla ES → Tabla EN
+
+| Tabla ES | Tabla EN |
+|---|---|
+| plantilla_mensaje | message_templates |
+
+### Columna ES → Columna EN
+
+| Columna ES | Columna EN | Notas |
+|---|---|---|
+| plantilla_mensaje_id | id | [PK] Mismo propósito; `UUID NOT NULL DEFAULT gen_random_uuid()`. |
+| nombre | name | `VARCHAR(100) NOT NULL` (ampliado de `VARCHAR(50)`); UNIQUE `(name, language)` — par de identidad en Meta. |
+| tipo | category | Cambio estructural: el `VARCHAR(30) + CHECK` con casos de uso ES (`recordatorio_3_dias`, `recordatorio_vencimiento`, `aviso_mora`, `bienvenida`, `confirmacion_pago`) se reemplaza por el enum `template_category` (`utility`/`marketing`/`authentication`) — categoría de Meta (ver valores). |
+| contenido | body_template | `TEXT` NOT NULL; placeholders contiguos `{{1}}…{{N}}`; CHECK no vacío (`chk_message_templates_body_non_empty`). |
+| — (no existía) | language | `VARCHAR(10)` NOT NULL, `DEFAULT 'es'` — código de idioma de Meta. |
+| — (no existía) | sample_variables | `JSONB` NOT NULL, `DEFAULT '{}'::jsonb` — contenido de ejemplo para Meta. |
+| — (no existía) | status | enum `template_status` NOT NULL, `DEFAULT 'draft'` — ciclo de vida con Meta (nuevo). |
+| — (no existía) | provider_template_id | `VARCHAR(255)` NULL — ID de la plantilla en Meta tras el submit. |
+| — (no existía) | provider_status | `VARCHAR(50)` NULL — espejo del estado crudo de Meta (p. ej. `IN_APPROVAL`, `APPROVED`). |
+| — (no existía) | is_active | `BOOLEAN` NOT NULL, `DEFAULT true`; la desactivación bloquea nuevos despachos sin borrar la fila. |
+| — (no existía) | created_by_user_id | [FK → users.id] NULL = sistema. |
+| — (no existía) | created_at / updated_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`. |
+
+**Notas**
+
+- La tabla ES no tenía estado de plantilla ni contador de aprobación de Meta; el ciclo `draft → submitted → approved|rejected|paused` es nuevo (ver valores de `template_status`).
+
+## envio_whatsapp → whatsapp_dispatches
+
+### Tabla ES → Tabla EN
+
+| Tabla ES | Tabla EN |
+|---|---|
+| envio_whatsapp | whatsapp_dispatches |
+
+### Columna ES → Columna EN
+
+| Columna ES | Columna EN | Notas |
+|---|---|---|
+| envio_whatsapp_id | id | [PK] Mismo propósito; `UUID NOT NULL DEFAULT gen_random_uuid()`. |
+| paciente_id | patient_id | [FK → patients.id] NOT NULL. |
+| cuota_id | — (eliminada) | La referencia directa a una cuota se elimina: el despacho apunta a `template_id` y a las variables resueltas. |
+| plantilla_id | template_id | [FK → message_templates.id] NOT NULL. |
+| mensaje_final | payload | Cambio de semántica: el texto final renderizado ya NO se almacena; EN guarda SOLO las variables resueltas (`JSONB`, no-PII). |
+| variables | payload | Fusionada con `mensaje_final`: `payload` conserva las variables resueltas tal como se enviaron (`JSONB`, no-PII). |
+| whatsapp_message_id | provider_message_id | `VARCHAR(255)` NULL; UNIQUE (wamid; dedupe de statuses del webhook). |
+| estado | status | `VARCHAR(20) + CHECK` → enum `dispatch_status`; NOT NULL, `DEFAULT 'queued'`. Se AGREGA `queued` (no existía en ES); `enviado` → `sent`. |
+| fecha_envio | sent_at | `TIMESTAMPTZ` NULL; se completa al enviar efectivamente. |
+| — (no existía) | send_attempts | `SMALLINT` NOT NULL, `DEFAULT 0`; CHECK `0..3` — nueva columna técnica (máximo 3 intentos de envío). |
+| — (no existía) | provider_error | `TEXT` NULL — detalle del fallo del proveedor; nunca se espeja en auditoría. |
+| — (no existía) | phone | `VARCHAR(50)` NOT NULL — instantánea canónica del teléfono al momento del despacho. |
+| — (no existía) | dedupe_key | `TEXT` NULL; UNIQUE — nueva columna técnica (D1): `sha256(patient_id ‖ template_id ‖ created_by_user_id ‖ variables canónicas)`; despacho duplicado idéntico → 409. |
+| — (no existía) | created_by_user_id | [FK → users.id] NULL = sistema. |
+| — (no existía) | created_at / updated_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`. |
+
+**Notas**
+
+- `payload` (no-PII) y `phone` (instantánea) se fijan en la transacción de creación; la plantilla aprobada + activa es condición para despachar (gate del servicio).
+
+## conversacion_bot → bot_conversations
+
+### Tabla ES → Tabla EN
+
+| Tabla ES | Tabla EN |
+|---|---|
+| conversacion_bot | bot_conversations |
+
+### Columna ES → Columna EN
+
+| Columna ES | Columna EN | Notas |
+|---|---|---|
+| conversacion_bot_id | id | [PK] Mismo propósito; `UUID NOT NULL DEFAULT gen_random_uuid()`. |
+| paciente_id | patient_id | Cambio de cardinalidad: [FK → patients.id] NOT NULL en ES; NULL en EN hasta que la conversación se identifica (CHECK `state_matches_patient`). |
+| telefono | wa_id | `VARCHAR(50)` NOT NULL; UNIQUE — una sola conversación por número (identidad WhatsApp normalizada). |
+| estado_conversacion | state | `VARCHAR(30) + CHECK` → enum `bot_conversation_state`; NOT NULL, `DEFAULT 'unidentified'`; máquina de estados rediseñada (ver valores). |
+| ultima_interaccion | last_activity_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`; define la ventana CSW de 24h. |
+| activa | — (eliminada) | La flag `activa` desaparece: el ciclo de vida se modela con `state` + `ended_at` (NULL hasta un cierre explícito). |
+| — (no existía) | failed_attempts | `SMALLINT` NOT NULL, `DEFAULT 0`; CHECK `0..3` — nueva columna técnica (intentos fallidos de identificación). |
+| — (no existía) | lockout_until | `TIMESTAMPTZ` NULL — bloqueo suave de 24h tras 3 fallos; NULL = sin bloqueo (nueva columna técnica). |
+| — (no existía) | started_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`. |
+| — (no existía) | ended_at | `TIMESTAMPTZ` NULL; NULL hasta que exista una funcionalidad de cierre explícito. |
+
+## mensaje_bot → bot_messages
+
+### Tabla ES → Tabla EN
+
+| Tabla ES | Tabla EN |
+|---|---|
+| mensaje_bot | bot_messages |
+
+### Columna ES → Columna EN
+
+| Columna ES | Columna EN | Notas |
+|---|---|---|
+| mensaje_bot_id | id | [PK] Mismo propósito; `UUID NOT NULL DEFAULT gen_random_uuid()`. |
+| conversacion_id | conversation_id | [FK → bot_conversations.id] NOT NULL. |
+| direccion | direction | `VARCHAR(10) + CHECK` → enum `bot_direction`; NOT NULL. `entrante` → `inbound`, `saliente` → `outbound`. |
+| tipo_mensaje | type | `VARCHAR(20) + CHECK` (texto/imagen/audio/documento) → `VARCHAR(10)` NOT NULL, `DEFAULT 'text'`, CHECK `type IN ('text','template')`: sin soporte de media en esta fase (no es enum PG: la lista de 5 tipos es fija). |
+| contenido | body | `TEXT` NOT NULL (en ES NULL; EN obligatorio: texto del mensaje entrante o de la respuesta). |
+| intent_detectado | intent | `VARCHAR(20)` NULL; CHECK `intent IN ('saldo','cuotas','proxima')` — vocabulario nuevo (el ES era `consulta_deuda`, `consulta_proxima_cuota`, `hablar_con_humano`, `envio_comprobante`). |
+| payload_raw | metadata | El JSONB crudo del webhook se reemplaza por `metadata` con contenido operacional (`{ status: 'sent'|'failed', error }`); `JSONB` NOT NULL, `DEFAULT '{}'::jsonb`. |
+| media_url | — (eliminada) | Sin soporte de media en esta fase. |
+| timestamp | created_at | `TIMESTAMPTZ` NOT NULL, `DEFAULT now()`; tabla append-only. |
+| — (no existía) | provider_message_id | `VARCHAR(255)` NULL; UNIQUE — dedupe de entregas duplicadas (wamid) (nueva columna técnica). |
+| — (no existía) | template_id | [FK → message_templates.id] NULL; se fija en envíos de plantilla (CHECK `template_requires_template_type`). |
+
 ## Valores de enumeración: Valor ES → Valor EN
 
 ### `user_role` (columna `users.role`)
@@ -341,13 +449,73 @@ Nota legado: en el modelo `roles[]` previo, `'user'` mapea a `patient` y `'super
 | reducir_cuota | reduce_installment |
 | reducir_plazo | reduce_term |
 
-## Tablas de la siguiente fase (bot de WhatsApp)
+### `dispatch_status` (columna `whatsapp_dispatches.status`)
 
-Las siguientes tablas pertenecen al módulo de bot de WhatsApp, fuera del alcance de la fase actual (módulos de negocio núcleo). Se listan con su nombre EN propuesto; la traducción detallada de columnas se definirá en la siguiente fase.
+| Valor ES | Valor EN |
+|---|---|
+| enviado | sent |
+| entregado | delivered |
+| leido | read |
+| fallido | failed |
+| — (nuevo) | queued |
 
-| Tabla ES | Tabla EN | Estado |
-|---|---|---|
-| plantilla_mensaje | message_templates | Pendiente (siguiente fase) |
-| envio_whatsapp | whatsapp_dispatches | Pendiente (siguiente fase) |
-| conversacion_bot | bot_conversations | Pendiente (siguiente fase) |
-| mensaje_bot | bot_messages | Pendiente (siguiente fase) |
+Nota: el CHECK ES `('enviado','entregado','leido','fallido')` se convierte en enum con el valor adicional `queued` (en cola antes del envío), que pasa a ser el `DEFAULT`.
+
+### `bot_direction` (columna `bot_messages.direction`)
+
+| Valor ES | Valor EN |
+|---|---|
+| entrante | inbound |
+| saliente | outbound |
+
+### `bot_conversation_state` (columna `bot_conversations.state`)
+
+| Valor ES | Valor EN |
+|---|---|
+| — (nuevo) | unidentified |
+| — (nuevo) | awaiting_document |
+| — (nuevo) | identified |
+
+Nota: la máquina de estados se rediseñó. El CHECK ES modelaba navegación por menú (`inicio`, `menu_principal`, `consultando_deuda`, `consultando_cuotas`, `esperando_comprobante`); el enum EN modela el ciclo de identificación por teléfono/documento, con bloqueo suave de 24h tras 3 fallos.
+
+### `template_category` (columna `message_templates.category`)
+
+| Valor ES | Valor EN |
+|---|---|
+| recordatorio_3_dias | utility |
+| recordatorio_vencimiento | utility |
+| aviso_mora | utility |
+| bienvenida | utility |
+| confirmacion_pago | utility |
+| — (nuevo) | marketing |
+| — (nuevo) | authentication |
+
+Nota: el `tipo` ES etiquetaba casos de uso (`recordatorio_3_dias`, …) mediante CHECK; la categoría EN sigue la taxonomía de Meta (`utility`/`marketing`/`authentication`) y se asigna al crear la plantilla. El mapeo de casos de uso ES → categoría EN es indicativo: el diseño solo fuerza `utility` para plantillas de recordatorio al despachar.
+
+### `template_status` (columna `message_templates.status`)
+
+| Valor ES | Valor EN |
+|---|---|
+| — (nuevo) | draft |
+| — (nuevo) | submitted |
+| — (nuevo) | approved |
+| — (nuevo) | rejected |
+| — (nuevo) | paused |
+
+Nota: la tabla ES no tenía estado de plantilla; el ciclo de vida con Meta (borrador → enviada → aprobada/rechazada/pausada) es nuevo.
+
+## Formato canónico de teléfono (WhatsApp)
+
+La identidad del paciente en WhatsApp se apoya en `patients.phone`. El formato canónico para móviles es `+591XXXXXXXX` (12 caracteres: código de país 591 + 8 dígitos).
+
+**Heurística determinista** (compartida entre `src/whatsapp/phone-normalizer.ts` y la copia autocontenida dentro de la migración 003):
+
+1. Se eliminan los separadores conservando un único `+` inicial (`+591 7000-0001` → `+59170000001`).
+2. 8 dígitos que empiezan con 6 o 7 → `+591` + dígitos (`70000001` → `+59170000001`).
+3. `591` + 8 dígitos → `+` + dígitos (`59170000001` → `+59170000001`).
+4. Ya canónico (`+591` + 8 dígitos) → sin cambios.
+5. Cualquier otro caso → forma sin separadores tal como se ingresó (nunca se adivina).
+
+**Excepciones "as-provided"** (la heurística no aplica y el valor se conserva como se ingresó): teléfonos fijos (`24000000`), extranjeros (`+541123456789`) y casos ambiguos. Por eso `patients.phone` NO tiene CHECK de formato: los formatos legados siguen siendo representables.
+
+**Pase de datos (migración 003):** reescritura conservadora y con reporte. Cada fila reescrita se respalda en `phone_normalization_backup` (restaurable por `down()`); los grupos de colisión (dos o más filas que normalizan al mismo valor) se omiten completos y se registran; el reporte de consola lista CADA fila reescrita (`REWRITE`) y omitida (`SKIP<collision|no_heuristic>`). La búsqueda del bot compara `wa_id` con `patients.phone` normalizando ambos lados (`phoneMatchesLeftNormalized`), de modo que los formatos legados coinciden con el canónico al buscar.

@@ -32,10 +32,11 @@ describe('auth single-role migration (design sections 9 and 10)', () => {
   });
 
   it('migrates a fresh database cleanly from Init with no users', async () => {
+    // 4 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot.
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(3);
+    expect(applied[0].count).toBe(4);
 
     const users: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM users`,
@@ -61,7 +62,8 @@ describe('auth single-role migration (design sections 9 and 10)', () => {
   });
 
   it('maps legacy roles arrays to the single role column (spec: legacy roles migrated)', async () => {
-    await dataSource.undoLastMigration(); // revert 002
+    await dataSource.undoLastMigration(); // revert 003 (WhatsAppBot)
+    await dataSource.undoLastMigration(); // revert 002 (CoreModules)
     await dataSource.undoLastMigration(); // revert 001 -> legacy columns restored
 
     await dataSource.query(
@@ -95,7 +97,8 @@ describe('auth single-role migration (design sections 9 and 10)', () => {
   });
 
   it('reverts to the legacy array model and restores lastName', async () => {
-    await dataSource.undoLastMigration(); // revert 002
+    await dataSource.undoLastMigration(); // revert 003 (WhatsAppBot)
+    await dataSource.undoLastMigration(); // revert 002 (CoreModules)
     await dataSource.undoLastMigration(); // revert 001
 
     const rows: LegacyUserRow[] = await dataSource.query(

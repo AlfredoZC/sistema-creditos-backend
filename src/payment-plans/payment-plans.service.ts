@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Decimal from 'decimal.js';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
 import {
@@ -29,6 +29,7 @@ import { FinancingEngine } from './financing/financing-engine';
 import { RecalculationStrategyFactory } from './strategies';
 
 const MONEY_DECIMALS = 2;
+const HALF_UP_ROUNDING = Decimal.ROUND_HALF_UP;
 const AUDIT_ACTION_PLAN_CREATED = 'payment_plan.created';
 const AUDIT_TABLE_PAYMENT_PLANS = 'payment_plans';
 const DEFAULT_MONTHLY_INTEREST_RATE = '2.00';
@@ -47,6 +48,21 @@ export interface InstallmentRead {
   // Derived read-only flag (design section 11): due before today AND still
   // pending/partial. Never a write.
   overdue: boolean;
+}
+
+/**
+ * Patient-scoped debt summary (design section 10, D4) — consumed server-side
+ * by the WhatsApp bot for identified conversations. Service-only: never a
+ * route of any kind. Money fields are decimal strings, never JS floats.
+ */
+export interface PatientDebtSummary {
+  outstandingBalance: string;
+  nextDueInstallment: {
+    installmentNumber: number;
+    totalAmount: string;
+    dueDate: string;
+  } | null;
+  overdueTotal: string;
 }
 
 /**
@@ -240,6 +256,81 @@ export class PaymentPlansService {
     }));
   }
 
+  /**
+   * Patient-scoped debt read (design section 10, D4): the latest
+   * active|delinquent plan of the patient's surgery (only non-completed/
+   * non-cancelled plans carry debt), the earliest future non-cancelled
+   * pending|partial installment as next due, and the overdue total derived at
+   * read time (pending|partial with due_date < today, HALF_UP to cents).
+   * outstandingBalance is the plan's tracked column — never recomputed.
+   * No plan -> zero summary ('0.00', null, '0.00').
+   */
+  async getPatientDebtSummary(patientId: string): Promise<PatientDebtSummary> {
+    const plan = await this.paymentPlanRepository.findOne({
+      where: {
+        status: In([PaymentPlanStatus.ACTIVE, PaymentPlanStatus.DELINQUENT]),
+        surgery: { patientId },
+      },
+      order: { startDate: 'DESC' },
+    });
+    if (!plan) {
+      return {
+        outstandingBalance: '0.00',
+        nextDueInstallment: null,
+        overdueTotal: '0.00',
+      };
+    }
+
+    const installments = await this.installmentRepository.find({
+      where: { paymentPlanId: plan.id },
+    });
+    const today = todayUtcDateString();
+
+    // Earliest (due_date ASC, then installment_number ASC) non-cancelled
+    // pending|partial installment still due today or later.
+    const dueCandidates = installments
+      .filter(
+        (installment) =>
+          isUnpaid(installment.status) && installment.dueDate >= today,
+      )
+      .sort((a, b) =>
+        a.dueDate === b.dueDate
+          ? a.installmentNumber - b.installmentNumber
+          : a.dueDate < b.dueDate
+            ? -1
+            : 1,
+      );
+    const nextDue = dueCandidates[0];
+    const nextDueInstallment = nextDue
+      ? {
+          installmentNumber: nextDue.installmentNumber,
+          totalAmount: nextDue.totalAmount,
+          dueDate: nextDue.dueDate,
+        }
+      : null;
+
+    const overdueTotal = installments
+      .filter((installment) =>
+        isOverdue(installment.dueDate, today, installment.status),
+      )
+      .reduce(
+        (sum, installment) =>
+          sum.plus(
+            new Decimal(installment.totalAmount).minus(
+              new Decimal(installment.paidAmount),
+            ),
+          ),
+        new Decimal(0),
+      )
+      .toFixed(MONEY_DECIMALS, HALF_UP_ROUNDING);
+
+    return {
+      outstandingBalance: plan.outstandingBalance,
+      nextDueInstallment,
+      overdueTotal,
+    };
+  }
+
   private async registerDownPayment(
     manager: EntityManager,
     paymentPlanId: string,
@@ -348,4 +439,12 @@ function isOverdue(
   const dueDateString =
     dueDate instanceof Date ? toUtcDateString(dueDate) : dueDate;
   return dueDateString < today;
+}
+
+/** True for the unpaid statuses that still carry debt (pending, partial). */
+function isUnpaid(status: InstallmentStatus): boolean {
+  return (
+    status === InstallmentStatus.PENDING ||
+    status === InstallmentStatus.PARTIAL
+  );
 }
