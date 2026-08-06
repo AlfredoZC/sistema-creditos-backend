@@ -53,6 +53,25 @@ jest.setTimeout(60000);
 const RUN_SUFFIX = `${process.pid}${Date.now()}`;
 let uniqueCounter = 0;
 
+/**
+ * ISO 'YYYY-MM-DD' (UTC) `offsetDays` from today — keeps the pinned-debt
+ * fixtures relative to the running clock so they never rot (the spec pin
+ * used to be the fixed date 2026-08-05, which aged past the CSW window and
+ * made installment 2 overdue). Mirrors todayUtcDateString() semantics.
+ */
+function isoDateFromToday(offsetDays: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** The next-due date used by every pinned-debt fixture/assertion below. */
+const NEXT_DUE_DATE = isoDateFromToday(7);
+const SURGERY_DATE = isoDateFromToday(30);
+
 const WEBHOOK_PATH = '/api/whatsapp/webhook';
 
 // patients.phone is UNIQUE (migration 002) and patient rows are shared with
@@ -216,7 +235,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
       .send({
         patientId,
         surgeryCatalogId: catalogResponse.body.id,
-        scheduledDate: '2026-08-15',
+        scheduledDate: SURGERY_DATE,
         totalCost: '10000.00',
       });
     expect(surgeryResponse.status).toBe(201);
@@ -257,17 +276,18 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
 
     // Pin the scenario state deterministically (the suite shares
     // db_creditos_test and the clock moves): installment 1 stays PARTIAL and
-    // overdue; installment 2 becomes the next due (spec pin 2026-08-05); the
-    // rest move far-future so only installment 1 is overdue.
+    // overdue; installment 2 becomes the next due (NEXT_DUE_DATE, relative to
+    // the run clock); the rest move far-future so only installment 1 is
+    // overdue.
     await dataSource.query(
       `UPDATE installments SET due_date = '2020-01-01'
         WHERE payment_plan_id = $1 AND installment_number = 1`,
       [planId],
     );
     await dataSource.query(
-      `UPDATE installments SET due_date = '2026-08-05'
+      `UPDATE installments SET due_date = $2
         WHERE payment_plan_id = $1 AND installment_number = 2`,
-      [planId],
+      [planId, NEXT_DUE_DATE],
     );
     await dataSource.query(
       `UPDATE installments SET due_date = '2999-01-01'
@@ -430,7 +450,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
       const outbound = await outboundMessages(conversation.id);
       const last = outbound[outbound.length - 1];
       expect(last.body).toBe(
-        'Tu saldo pendiente es Bs 8155.19. Próxima cuota: Bs 1113.27 (vence el 2026-08-05). Total vencido: Bs 613.27.',
+        `Tu saldo pendiente es Bs 8155.19. Próxima cuota: Bs 1113.27 (vence el ${NEXT_DUE_DATE}). Total vencido: Bs 613.27.`,
       );
       expect(last.intent).toBe('saldo');
       expect(last.type).toBe('text');
@@ -894,7 +914,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
         '8155.19', // debt amounts
         '1113.27',
         '613.27',
-        '2026-08-05',
+        NEXT_DUE_DATE,
       ];
       for (const sensitive of sensitiveValues) {
         expect(serialized).not.toContain(sensitive);

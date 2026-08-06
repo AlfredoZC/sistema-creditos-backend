@@ -39,6 +39,25 @@ jest.setTimeout(60000);
 const RUN_SUFFIX = `${process.pid}${Date.now()}`;
 let uniqueCounter = 0;
 
+/**
+ * ISO 'YYYY-MM-DD' (UTC) `offsetDays` from today — keeps the pinned-debt
+ * fixtures relative to the running clock so they never rot (the spec pin
+ * used to be the fixed date 2026-08-05, which aged past the CSW window and
+ * made installment 2 overdue). Mirrors todayUtcDateString() semantics.
+ */
+function isoDateFromToday(offsetDays: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** The next-due date used by every pinned-debt fixture/assertion below. */
+const NEXT_DUE_DATE = isoDateFromToday(7);
+const SURGERY_DATE = isoDateFromToday(30);
+
 // patients.phone is UNIQUE (migration 002) and patient rows are shared with
 // other suites on db_creditos_test — every insert needs a fresh phone.
 function uniquePhone(): string {
@@ -134,7 +153,8 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
   /**
    * A patient whose phone normalizes to a canonical +591 number with the
    * pinned debt state of payment-plans.spec (5.1): outstanding 8155.19,
-   * next due = installment 2 (1113.27 on 2026-08-05), overdue 613.27.
+   * next due = installment 2 (1113.27 on NEXT_DUE_DATE, relative to the run
+   * clock), overdue 613.27.
    */
   async function insertDebtFixture(
     phone: string,
@@ -147,8 +167,8 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
     );
     const surgeryRows: IdRow[] = await dataSource.query(
       `INSERT INTO surgeries (patient_id, surgery_catalog_id, scheduled_date, total_cost)
-       VALUES ($1, $2, '2026-08-15', '9000.00') RETURNING id`,
-      [patientId, catalogRows[0].id],
+       VALUES ($1, $2, $3, '9000.00') RETURNING id`,
+      [patientId, catalogRows[0].id, SURGERY_DATE],
     );
     const planRows: IdRow[] = await dataSource.query(
       `INSERT INTO payment_plans
@@ -160,7 +180,7 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
     );
     const installments = [
       { number: 1, total: '1113.27', paid: '500.00', due: '2020-01-01', status: 'partial' },
-      { number: 2, total: '1113.27', paid: '0.00', due: '2026-08-05', status: 'pending' },
+      { number: 2, total: '1113.27', paid: '0.00', due: NEXT_DUE_DATE, status: 'pending' },
       { number: 3, total: '1113.27', paid: '0.00', due: '2999-01-01', status: 'pending' },
     ];
     for (const installment of installments) {
@@ -602,7 +622,7 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       const last = outbound[outbound.length - 1];
       expect(last.body).toContain('8155.19');
       expect(last.body).toContain('1113.27');
-      expect(last.body).toContain('2026-08-05');
+      expect(last.body).toContain(NEXT_DUE_DATE);
       expect(last.body).toContain('613.27');
       expect(last.intent).toBe('saldo');
       expect(last.type).toBe('text');
@@ -628,7 +648,7 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       const outbound = await outboundMessages(conversationId);
       const last = outbound[outbound.length - 1];
       expect(last.body).toContain('1113.27');
-      expect(last.body).toContain('2026-08-05');
+      expect(last.body).toContain(NEXT_DUE_DATE);
       expect(last.body).toContain('número 2');
       expect(last.intent).toBe('cuotas');
     });
@@ -645,7 +665,7 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
 
       const outbound = await outboundMessages(conversationId);
       const last = outbound[outbound.length - 1];
-      expect(last.body).toContain('2026-08-05');
+      expect(last.body).toContain(NEXT_DUE_DATE);
       expect(last.intent).toBe('proxima');
     });
 
@@ -896,7 +916,7 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
         '8155.19', // debt amounts
         '1113.27',
         '613.27',
-        '2026-08-05',
+        NEXT_DUE_DATE,
       ];
       for (const sensitive of sensitiveValues) {
         expect(serialized).not.toContain(sensitive);
