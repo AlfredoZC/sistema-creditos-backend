@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { resolveCorsOrigins } from './common/cors.util';
 
 async function bootstrap() {
   // rawBody: true is REQUIRED for x-hub-signature-256 verification over the
@@ -11,6 +12,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   app.setGlobalPrefix('api');
+  app.enableCors({ origin: resolveCorsOrigins(process.env.CORS_ORIGINS) });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
