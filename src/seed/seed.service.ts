@@ -95,19 +95,33 @@ export class SeedService {
       profileIdByUserIndex.set(profile.userIndex, profileIds[index]);
     });
 
-    const users = initialData.users.map((user, index) =>
-      this.userRepository.create({
-        id: user.id,
-        email: user.email,
-        password: user.password,
-        name: user.name,
-        role: user.role,
-        isActive: true,
-        profile: profileIdByUserIndex.has(index)
-          ? ({ id: profileIdByUserIndex.get(index) } as Profile)
-          : undefined,
-      }),
-    );
+    const users = [];
+    for (const [index, user] of initialData.users.entries()) {
+      // Mirror auth.create(): EVERY user gets a profile. Explicit seed
+      // profiles keep their shape; users without one get the entity defaults
+      // (gender 'No especificado', photo '', photoPublicId '') so no seeded
+      // account is ever orphaned from its profile.
+      let profileId = profileIdByUserIndex.get(index);
+      if (profileId === undefined) {
+        const rows: { id: number }[] = await this.dataSource.query(
+          `INSERT INTO profiles (gender, photo, "photoPublicId")
+           VALUES ('No especificado', '', '') RETURNING id`,
+        );
+        profileId = rows[0].id;
+      }
+
+      users.push(
+        this.userRepository.create({
+          id: user.id,
+          email: user.email,
+          password: user.password,
+          name: user.name,
+          role: user.role,
+          isActive: true,
+          profile: { id: profileId } as Profile,
+        }),
+      );
+    }
 
     await this.userRepository.save(users);
   }

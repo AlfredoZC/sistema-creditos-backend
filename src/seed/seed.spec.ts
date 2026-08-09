@@ -64,9 +64,18 @@ describe('seed (whole-system demo data, design section 9)', () => {
 
     // Pinned row counts across the whole system.
     expect(await countRowsIn('users')).toBe(10);
-    expect(await countRowsIn('profiles')).toBe(6);
+    // One profile per user (6 explicit seed profiles + 4 default-generated
+    // for the users without an explicit entry — mirrors auth.create()).
+    expect(await countRowsIn('profiles')).toBe(10);
     expect(await countRowsIn('patients')).toBe(6);
     expect(await countRowsIn('doctors')).toBe(3);
+
+    // Every user is linked to a profile — no orphaned accounts.
+    const orphanedUsers: CountRow[] = await dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM users
+       WHERE "profileId" IS NULL`,
+    );
+    expect(orphanedUsers[0].count).toBe(0);
 
     // Doctor profile rows: the 3 phones equal the +59171000001..003 doctor
     // series (disjoint from the patients' +59170000001..06 series — shared
@@ -233,7 +242,7 @@ describe('seed (whole-system demo data, design section 9)', () => {
     const wipedProfileRows: CountRow[] = await dataSource.query(
       'SELECT COUNT(*)::int AS count FROM profiles',
     );
-    expect(wipedProfileRows[0].count).toBe(6);
+    expect(wipedProfileRows[0].count).toBe(10);
 
     const leftoverUsers: CountRow[] = await dataSource.query(
       `SELECT COUNT(*)::int AS count FROM users WHERE email = 'leftover.user@example.com'`,
