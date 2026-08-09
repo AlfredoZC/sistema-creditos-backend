@@ -34,7 +34,16 @@ const EXPECTED_TABLE_COLUMNS: Record<string, string[]> = {
     'address',
     'phone',
   ],
-  doctors: ['id', 'user_id', 'specialty', 'professional_license'],
+  doctors: [
+    'id',
+    'user_id',
+    'specialty',
+    'professional_license',
+    'first_name',
+    'paternal_last_name',
+    'maternal_last_name',
+    'phone',
+  ],
   surgery_catalog: ['id', 'name', 'description', 'base_cost'],
   surgeries: [
     'id',
@@ -108,6 +117,7 @@ const EXPECTED_ENUM_VALUES: Record<string, string[]> = {
 };
 
 const EXPECTED_INDEXES: Record<string, string[]> = {
+  doctors: ['uq_doctors_phone'],
   surgeries: ['idx_surgeries_patient_id'],
   surgery_doctors: [
     'idx_surgery_doctors_surgery_id',
@@ -147,9 +157,11 @@ describe('core modules migration (design sections 5 and 10)', () => {
       `INSERT INTO users (email, password, name, role) VALUES ($1, 'hashed', 'Doctor', 'doctor') RETURNING id`,
       [`doctor-${license}@example.com`],
     );
+    // AD10: uq_doctors_phone rejects two DEFAULT '' rows, so the phone is
+    // derived from the license (LIC-001 -> '+59171001', LIC-002 -> '+59171002').
     const doctor: IdRow[] = await dataSource.query(
-      `INSERT INTO doctors (user_id, specialty, professional_license) VALUES ($1, 'Traumatologia', $2) RETURNING id`,
-      [user[0].id, license],
+      `INSERT INTO doctors (user_id, specialty, professional_license, phone) VALUES ($1, 'Traumatologia', $2, $3) RETURNING id`,
+      [user[0].id, license, `+59171${license.replace(/\D/g, '')}`],
     );
     return doctor[0].id;
   }
@@ -225,11 +237,12 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('migrates a fresh database cleanly from Init', async () => {
-    // 4 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot.
+    // 5 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot,
+    // 004-DoctorDetails.
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(4);
+    expect(applied[0].count).toBe(5);
 
     for (const tableName of Object.keys(EXPECTED_TABLE_COLUMNS)) {
       if (tableName === 'payment_methods') {
