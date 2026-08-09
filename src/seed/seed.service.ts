@@ -145,13 +145,26 @@ export class SeedService {
   private async insertDoctors(): Promise<void> {
     await this.insertRows(
       'doctors',
-      ['id', 'user_id', 'specialty', 'professional_license'],
+      [
+        'id',
+        'user_id',
+        'specialty',
+        'professional_license',
+        'first_name',
+        'paternal_last_name',
+        'maternal_last_name',
+        'phone',
+      ],
       initialData.doctors.map(
         (d: SeedDoctor): Record<string, unknown> => ({
           id: d.id,
           user_id: d.userId,
           specialty: d.specialty,
           professional_license: d.professionalLicense,
+          first_name: d.firstName,
+          paternal_last_name: d.paternalLastName,
+          maternal_last_name: d.maternalLastName,
+          phone: d.phone,
         }),
       ),
     );

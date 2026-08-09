@@ -248,11 +248,11 @@ describe('whatsapp bot migration 003 contract (design sections 4 and 5)', () => 
     await dataSource.destroy();
   });
 
-  it('applies exactly Init/001/002 then 003 on the throwaway database', async () => {
+  it('applies exactly Init/001/002 then 003 and 004 on the throwaway database', async () => {
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(4);
+    expect(applied[0].count).toBe(5);
   });
 
   it('creates the four business tables with their design columns', async () => {
@@ -490,7 +490,8 @@ describe('whatsapp bot migration 003 contract (design sections 4 and 5)', () => 
     'down() restores original phones, drops the backup table, the four ' +
       'business tables, and the five enum types',
     async () => {
-      await dataSource.undoLastMigration(); // reverts 003
+      await dataSource.undoLastMigration(); // reverts 004 (DoctorDetails)
+      await dataSource.undoLastMigration(); // reverts 003 (WhatsAppBot)
 
       // Originals restored for every seeded patient (rewritten and untouched).
       for (let i = 0; i < PHONE_SEEDS.length; i += 1) {

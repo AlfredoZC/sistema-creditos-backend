@@ -55,6 +55,10 @@ export interface SeedDoctor {
   userId: string;
   specialty: string;
   professionalLicense: string;
+  firstName: string;
+  paternalLastName: string;
+  maternalLastName: string | null;
+  phone: string;
 }
 
 export interface SeedSurgeryCatalog {
@@ -485,18 +489,30 @@ const DOCTORS: SeedDoctor[] = [
     userId: ELENA_USER_ID,
     specialty: 'Cirugia general',
     professionalLicense: 'MED-301-1234',
+    firstName: 'Elena',
+    paternalLastName: 'Mendoza',
+    maternalLastName: 'Quiroga',
+    phone: '+59171000001',
   },
   {
     id: DOCTOR_2_ID,
     userId: FERNANDO_USER_ID,
     specialty: 'Anestesiologia',
     professionalLicense: 'MED-302-5678',
+    firstName: 'Fernando',
+    paternalLastName: 'Aguirre',
+    maternalLastName: 'Villca',
+    phone: '+59171000002',
   },
   {
     id: DOCTOR_3_ID,
     userId: GLORIA_USER_ID,
     specialty: 'Traumatologia y ortopedia',
     professionalLicense: 'MED-303-9012',
+    firstName: 'Gloria',
+    paternalLastName: 'Camacho',
+    maternalLastName: null,
+    phone: '+59171000003',
   },
 ];
 
