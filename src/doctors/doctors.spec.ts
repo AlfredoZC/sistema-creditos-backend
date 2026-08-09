@@ -96,6 +96,10 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
       email: emailFor(`doctor.${uniqueCounter++}`),
       password: 'Abc123',
       name: 'Juan Perez',
+      firstName: 'Juan',
+      paternalLastName: 'Perez',
+      maternalLastName: 'Mamani',
+      phone: `+59171${RUN_SUFFIX}${uniqueCounter++}`,
       specialty: 'Cardiology',
       professionalLicense: uniqueLicense(),
       ...overrides,
@@ -208,6 +212,9 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
       const token = await officeToken();
 
       const response = await createDoctor(token, {
+        firstName: 'Juan',
+        paternalLastName: 'Perez',
+        phone: `+59171${RUN_SUFFIX}${uniqueCounter++}`,
         specialty: 'Cardiology',
         professionalLicense: uniqueLicense(),
       });
@@ -368,6 +375,9 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
         userId: existingUserId,
         specialty: 'Pediatrics',
         professionalLicense: uniqueLicense(),
+        firstName: 'Juan',
+        paternalLastName: 'Perez',
+        phone: `+59171${RUN_SUFFIX}${uniqueCounter++}`,
       });
 
       expect(response.status).toBe(201);
@@ -391,9 +401,157 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
         userId: '00000000-0000-4000-8000-000000000000',
         specialty: 'Pediatrics',
         professionalLicense: uniqueLicense(),
+        firstName: 'Juan',
+        paternalLastName: 'Perez',
+        phone: `+59171${RUN_SUFFIX}${uniqueCounter++}`,
       });
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('doctor profile fields (design doctor-details-and-lists, AD4-AD6)', () => {
+    it('rejects creation missing any of firstName, paternalLastName or phone (400, account path)', async () => {
+      const token = await officeToken();
+
+      for (const missing of ['firstName', 'paternalLastName', 'phone'] as const) {
+        const body = doctorBody() as Record<string, unknown>;
+        delete body[missing];
+        const response = await createDoctor(token, body);
+        expect(response.status).toBe(400);
+      }
+    });
+
+    it('rejects creation missing any of firstName, paternalLastName or phone (400, userId path)', async () => {
+      const office = await officeToken();
+      const existingUserId = await insertUserRaw(
+        emailFor('existing.profile.doctor'),
+        'Existing Profile',
+        UserRole.PATIENT,
+      );
+
+      for (const missing of ['firstName', 'paternalLastName', 'phone'] as const) {
+        const body: Record<string, unknown> = {
+          userId: existingUserId,
+          specialty: 'Pediatrics',
+          professionalLicense: uniqueLicense(),
+          firstName: 'Juan',
+          paternalLastName: 'Perez',
+          phone: `+59171${RUN_SUFFIX}${uniqueCounter++}`,
+        };
+        delete body[missing];
+        const response = await createDoctor(office, body);
+        expect(response.status).toBe(400);
+      }
+    });
+
+    it('normalizes the phone on create and PATCH (+591 71 <digits> -> +59171<digits>)', async () => {
+      const token = await officeToken();
+      const createCounter = uniqueCounter++;
+
+      const created = await createDoctor(token, {
+        ...doctorBody(),
+        phone: `+591 71 ${RUN_SUFFIX}${createCounter}`,
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.phone).toBe(`+59171${RUN_SUFFIX}${createCounter}`);
+
+      const patchCounter = uniqueCounter++;
+      const patched = await updateDoctor(token, created.body.id as string, {
+        phone: `+591 71 ${RUN_SUFFIX}${patchCounter}`,
+      });
+      expect(patched.status).toBe(200);
+      expect(patched.body.phone).toBe(`+59171${RUN_SUFFIX}${patchCounter}`);
+    });
+
+    it('rejects a duplicate normalized phone on create with 409 and rolls back the users row (T8 atomicity)', async () => {
+      const token = await officeToken();
+      const phoneCounter = uniqueCounter++;
+
+      const first = await createDoctor(token, {
+        ...doctorBody(),
+        phone: `+591 71 ${RUN_SUFFIX}${phoneCounter}`,
+      });
+      expect(first.status).toBe(201);
+
+      const duplicateBody = doctorBody({
+        phone: `+59171${RUN_SUFFIX}${phoneCounter}`,
+      });
+      const response = await createDoctor(token, duplicateBody);
+
+      expect(response.status).toBe(409);
+      const doctorRows: IdRow[] = await dataSource.query(
+        'SELECT id FROM doctors WHERE phone = $1',
+        [`+59171${RUN_SUFFIX}${phoneCounter}`],
+      );
+      expect(doctorRows).toHaveLength(1);
+      const leftoverUsers: IdRow[] = await dataSource.query(
+        'SELECT id FROM users WHERE email = $1',
+        [duplicateBody.email as string],
+      );
+      expect(leftoverUsers).toHaveLength(0);
+    });
+
+    it('rejects a phone update collision with 409 and persists nothing', async () => {
+      const token = await officeToken();
+      const first = await createDoctor(token, doctorBody());
+      const second = await createDoctor(token, doctorBody());
+
+      const response = await updateDoctor(token, second.body.id as string, {
+        phone: first.body.phone as string,
+      });
+
+      expect(response.status).toBe(409);
+      const doctorRows: { phone: string }[] = await dataSource.query(
+        'SELECT phone FROM doctors WHERE id = $1',
+        [second.body.id as string],
+      );
+      expect(doctorRows[0].phone).toBe(second.body.phone);
+    });
+
+    it('returns nested user without a password key on read and list (AD6)', async () => {
+      const token = await officeToken();
+      const created = await createDoctor(token, doctorBody());
+      expect(created.status).toBe(201);
+
+      const read = await getDoctor(token, created.body.id as string);
+      expect(read.status).toBe(200);
+      expect(read.body.user).toBeDefined();
+      expect(read.body.user.id).toBe(created.body.userId);
+      expect(read.body.user.name).toBe('Juan Perez');
+      expect('password' in read.body.user).toBe(false);
+
+      const list = await listDoctors(token, { limit: 10, offset: 0 });
+      expect(list.status).toBe(200);
+      expect(list.body.data.length).toBeGreaterThan(0);
+      for (const row of list.body.data as Array<Record<string, unknown>>) {
+        expect(row.user).toBeDefined();
+        expect('password' in (row.user as Record<string, unknown>)).toBe(false);
+      }
+    });
+
+    it('never syncs profile fields into users.name (create and PATCH)', async () => {
+      const token = await officeToken();
+      const created = await createDoctor(token, doctorBody());
+      expect(created.status).toBe(201);
+
+      const nameAfterCreate: { name: string }[] = await dataSource.query(
+        'SELECT name FROM users WHERE id = $1',
+        [created.body.userId as string],
+      );
+      expect(nameAfterCreate[0].name).toBe('Juan Perez');
+
+      const patched = await updateDoctor(token, created.body.id as string, {
+        firstName: 'Changed',
+        paternalLastName: 'Surname',
+      });
+      expect(patched.status).toBe(200);
+
+      const nameAfterPatch: { name: string }[] = await dataSource.query(
+        'SELECT name FROM users WHERE id = $1',
+        [created.body.userId as string],
+      );
+      expect(nameAfterPatch[0].name).toBe('Juan Perez');
     });
   });
 

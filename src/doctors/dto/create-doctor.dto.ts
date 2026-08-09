@@ -37,6 +37,26 @@ export class CreateDoctorDto {
   })
   password?: string;
 
+  // Profile fields are required on BOTH paths (no ValidateIf gating, AD4):
+  // the doctor profile is completed at creation whether an account is linked
+  // from the start or created atomically with the doctors row (T8).
+  @IsString()
+  @MaxLength(50)
+  firstName: string;
+
+  @IsString()
+  @MaxLength(50)
+  paternalLastName: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  maternalLastName?: string;
+
+  @IsString()
+  @MaxLength(50)
+  phone: string;
+
   @IsString()
   specialty: string;
 

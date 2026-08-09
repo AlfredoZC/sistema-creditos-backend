@@ -12,6 +12,7 @@ import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { handleDatabaseError } from '../common/errors';
+import { normalizePhone } from '../whatsapp/phone-normalizer';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { UpdateDoctorDto } from './dto/update-doctor.dto';
 import { Doctor } from './entities/doctor.entity';
@@ -29,8 +30,8 @@ export class DoctorsService {
    * users row (role doctor, bcrypt password) and the doctors row are inserted
    * in ONE transaction. When the DTO provides an existing userId, the doctor
    * row links to that account instead and the account role is upgraded to
-   * doctor. A professional license duplicate rolls back the users row with it
-   * (23505 -> 409, nothing persisted).
+   * doctor. A professional license or phone duplicate rolls back the users row
+   * with the doctors row (23505 -> 409, nothing persisted — AD5).
    */
   async create(createDoctorDto: CreateDoctorDto): Promise<Doctor> {
     try {
@@ -67,6 +68,10 @@ export class DoctorsService {
           userId,
           specialty: createDoctorDto.specialty,
           professionalLicense: createDoctorDto.professionalLicense,
+          firstName: createDoctorDto.firstName,
+          paternalLastName: createDoctorDto.paternalLastName,
+          maternalLastName: createDoctorDto.maternalLastName ?? null,
+          phone: normalizePhone(createDoctorDto.phone),
         });
         return manager.save(doctor);
       });
@@ -81,12 +86,16 @@ export class DoctorsService {
     const [data, total] = await this.doctorRepository.findAndCount({
       take: limit,
       skip: offset,
+      relations: ['user'],
     });
     return { data, total, limit, offset };
   }
 
   async findOne(id: string, currentUser: User): Promise<Doctor> {
-    const doctor = await this.doctorRepository.findOne({ where: { id } });
+    const doctor = await this.doctorRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
     if (!doctor) throw new NotFoundException('Doctor not found');
     this.assertOwnRecordOrStaff(doctor, currentUser);
     return doctor;
@@ -101,6 +110,11 @@ export class DoctorsService {
       const doctor = await this.doctorRepository.findOne({ where: { id } });
       if (!doctor) throw new NotFoundException('Doctor not found');
       this.assertOwnRecordOrStaff(doctor, currentUser);
+      if (updateDoctorDto.phone !== undefined) {
+        (updateDoctorDto as UpdateDoctorDto).phone = normalizePhone(
+          updateDoctorDto.phone,
+        );
+      }
       Object.assign(doctor, updateDoctorDto);
       return await this.doctorRepository.save(doctor);
     } catch (error) {
