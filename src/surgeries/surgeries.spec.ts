@@ -824,4 +824,161 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('surgery list (design section 4: staff-only GET /api/surgeries)', () => {
+    function listSurgeries(token: string, query: Record<string, unknown>) {
+      return request(app.getHttpServer())
+        .get('/api/surgeries')
+        .set('Authorization', `Bearer ${token}`)
+        .query(query);
+    }
+
+    it('returns the pagination envelope with nested patient, catalog and doctor relations for office users', async () => {
+      const office = await officeUser();
+      const patientId = await createPatientRaw();
+      const catalog = await createCatalogEntry(office.token);
+      const doctorId = await createDoctorRaw();
+      // 2999 dates pin the rows at the top of the DESC order: the shared DB
+      // accumulates rows from every run, so mid-list dates drift behind.
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id, { scheduledDate: '2999-01-05' }),
+      );
+      expect(created.status).toBe(201);
+      const assigned = await assignDoctor(office.token, created.body.id as string, {
+        doctorId,
+        role: SurgeryDoctorRole.ASSISTANT,
+      });
+      expect(assigned.status).toBe(201);
+
+      const response = await listSurgeries(office.token, { limit: 100, offset: 0 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toBeInstanceOf(Array);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body.limit).toBe(100);
+      expect(response.body.offset).toBe(0);
+      const row = response.body.data.find(
+        (surgery: { id: string }) => surgery.id === created.body.id,
+      );
+      expect(row).toBeDefined();
+      expect(row.patient.id).toBe(patientId);
+      expect(row.surgeryCatalog.id).toBe(catalog.id);
+      expect(row.surgeryDoctors).toHaveLength(1);
+      expect(row.surgeryDoctors[0].doctor.id).toBe(doctorId);
+      expect(row.surgeryDoctors[0].role).toBe(SurgeryDoctorRole.ASSISTANT);
+    });
+
+    it('orders surgeries by scheduledDate DESC (newest first)', async () => {
+      const office = await officeUser();
+      const patientId = await createPatientRaw();
+      const catalog = await createCatalogEntry(office.token);
+      // 2999 dates pin the pair at the top of the DESC order (the shared DB
+      // accumulates rows from every run, so mid-list dates drift past the
+      // page window); the two rows keep a fixed mutual order either way.
+      const later = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id, { scheduledDate: '2999-01-10' }),
+      );
+      expect(later.status).toBe(201);
+      const earlier = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id, { scheduledDate: '2999-01-08' }),
+      );
+      expect(earlier.status).toBe(201);
+
+      const response = await listSurgeries(office.token, { limit: 100, offset: 0 });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map(
+        (surgery: { id: string }) => surgery.id as string,
+      );
+      expect(ids.indexOf(later.body.id as string)).toBeLessThan(
+        ids.indexOf(earlier.body.id as string),
+      );
+    });
+
+    it('reports the real surgery count without hasMany duplication and offset pages neither skip nor repeat', async () => {
+      const office = await officeUser();
+      const patientId = await createPatientRaw();
+      const catalog = await createCatalogEntry(office.token);
+      // AD7 pin: one surgery with three assigned doctors and one with a single
+      // doctor — getManyAndCount must still count each surgery once.
+      const heavy = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id, { scheduledDate: '2999-02-01' }),
+      );
+      expect(heavy.status).toBe(201);
+      for (let i = 0; i < 3; i++) {
+        const doctorId = await createDoctorRaw();
+        const assigned = await assignDoctor(office.token, heavy.body.id as string, {
+          doctorId,
+          role:
+            i === 0
+              ? SurgeryDoctorRole.PRINCIPAL
+              : SurgeryDoctorRole.ASSISTANT,
+        });
+        expect(assigned.status).toBe(201);
+      }
+      const light = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id, { scheduledDate: '2999-02-02' }),
+      );
+      expect(light.status).toBe(201);
+      const lightDoctorId = await createDoctorRaw();
+      const lightAssigned = await assignDoctor(
+        office.token,
+        light.body.id as string,
+        { doctorId: lightDoctorId, role: SurgeryDoctorRole.PRINCIPAL },
+      );
+      expect(lightAssigned.status).toBe(201);
+
+      const dbCount: { count: string }[] = await dataSource.query(
+        'SELECT COUNT(*)::text AS count FROM surgeries',
+      );
+
+      // Offset paging over the full range: exactly `total` rows, every row
+      // exactly once — nothing skipped, nothing repeated.
+      const paged: string[] = [];
+      let page: { data: { id: string }[]; total: number };
+      do {
+        page = (await listSurgeries(office.token, { limit: 10, offset: paged.length })).body;
+        expect(page.total).toBe(Number(dbCount[0].count));
+        for (const row of page.data) paged.push(row.id);
+      } while (paged.length < page.total);
+
+      expect(paged).toHaveLength(Number(dbCount[0].count));
+      expect(new Set(paged).size).toBe(paged.length);
+      expect(paged.filter((id) => id === heavy.body.id)).toHaveLength(1);
+      expect(paged.filter((id) => id === light.body.id)).toHaveLength(1);
+    });
+
+    it('forbids patient-role users from listing surgeries (403)', async () => {
+      const patient = await patientToken();
+
+      const response = await listSurgeries(patient, { limit: 10, offset: 0 });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('forbids doctor-role users from listing surgeries (403)', async () => {
+      const doctorUserId = await insertUserRaw(
+        emailFor(`doctor.list.surgeries.${uniqueCounter++}`),
+        'Doctor List Surgeries',
+        UserRole.DOCTOR,
+      );
+
+      const response = await listSurgeries(await tokenForUserId(doctorUserId), {
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects unauthenticated list requests with 401', async () => {
+      const response = await request(app.getHttpServer()).get('/api/surgeries');
+      expect(response.status).toBe(401);
+    });
+  });
 });

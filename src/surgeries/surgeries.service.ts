@@ -9,6 +9,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
 import { SurgeryDoctorRole } from '../common/enums';
+import { PaginationDto } from '../common/dtos/pagination.dto';
 import { handleDatabaseError } from '../common/errors';
 import { Doctor } from '../doctors/entities/doctor.entity';
 import { Patient } from '../patients/entities/patient.entity';
@@ -234,6 +235,27 @@ export class SurgeriesService {
       if (error instanceof HttpException) throw error;
       handleDatabaseError(error);
     }
+  }
+
+  /**
+   * AD7 (design section 4): staff-only paginated list. QueryBuilder
+   * getManyAndCount keeps the count DISTINCT per surgery (never findAndCount
+   * with the surgeryDoctors hasMany, which would double-count rows), so total
+   * equals the real surgery count regardless of how many doctors are assigned.
+   */
+  async findAll(paginationDto: PaginationDto) {
+    const { limit = 10, offset = 0 } = paginationDto;
+    const query = this.surgeryRepository
+      .createQueryBuilder('surgery')
+      .leftJoinAndSelect('surgery.patient', 'patient')
+      .leftJoinAndSelect('surgery.surgeryCatalog', 'catalog')
+      .leftJoinAndSelect('surgery.surgeryDoctors', 'assignment')
+      .leftJoinAndSelect('assignment.doctor', 'doctor')
+      .orderBy('surgery.scheduledDate', 'DESC')
+      .take(limit)
+      .skip(offset);
+    const [data, total] = await query.getManyAndCount();
+    return { data, total, limit, offset };
   }
 
   private async assertNoPaymentPlan(surgeryId: string): Promise<void> {

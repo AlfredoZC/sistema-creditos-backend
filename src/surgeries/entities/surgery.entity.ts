@@ -8,8 +8,10 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { SurgeryDoctor } from './surgery-doctor.entity';
 
 @Entity('surgeries')
 export class Surgery {
@@ -60,4 +62,10 @@ export class Surgery {
   @ApiProperty({ nullable: true })
   @Column('text', { nullable: true })
   notes?: string | null;
+
+  // AD7: inverse side of the surgery_doctors join entity — used by the list
+  // endpoint to embed each assignment with its doctor. The join column is
+  // owned by SurgeryDoctor.surgery_id.
+  @OneToMany(() => SurgeryDoctor, (assignment) => assignment.surgery)
+  surgeryDoctors?: SurgeryDoctor[];
 }

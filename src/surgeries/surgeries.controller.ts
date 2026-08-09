@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
+import { PaginationDto } from '../common/dtos/pagination.dto';
 import {
   AssignDoctorDto,
   CreateSurgeryDto,
@@ -33,6 +36,13 @@ export class SurgeriesController {
   })
   create(@Body() createSurgeryDto: CreateSurgeryDto) {
     return this.surgeriesService.create(createSurgeryDto);
+  }
+
+  @Get()
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @ApiResponse({ status: 200, description: 'Paginated surgery list' })
+  findAll(@Query() paginationDto: PaginationDto) {
+    return this.surgeriesService.findAll(paginationDto);
   }
 
   @Patch(':id')
