@@ -67,6 +67,23 @@ describe('seed (whole-system demo data, design section 9)', () => {
     expect(await countRowsIn('profiles')).toBe(6);
     expect(await countRowsIn('patients')).toBe(6);
     expect(await countRowsIn('doctors')).toBe(3);
+
+    // Doctor profile rows: the 3 phones equal the +59171000001..003 doctor
+    // series (disjoint from the patients' +59170000001..06 series — shared
+    // database, unique phone constraint).
+    const doctorPhones: Array<{ phone: string }> = await dataSource.query(
+      'SELECT phone FROM doctors ORDER BY phone',
+    );
+    expect(doctorPhones.map((row) => row.phone)).toEqual([
+      '+59171000001',
+      '+59171000002',
+      '+59171000003',
+    ]);
+    const patientPhones: Array<{ phone: string }> = await dataSource.query(
+      'SELECT phone FROM patients',
+    );
+    const doctorPhoneSet = new Set(doctorPhones.map((row) => row.phone));
+    expect(patientPhones.filter((row) => doctorPhoneSet.has(row.phone))).toEqual([]);
     expect(await countRowsIn('surgery_catalog')).toBe(5);
     expect(await countRowsIn('surgeries')).toBe(6);
     expect(await countRowsIn('surgery_doctors')).toBe(15);
