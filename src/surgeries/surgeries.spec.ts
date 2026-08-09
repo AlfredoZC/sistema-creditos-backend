@@ -127,11 +127,14 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       'Doctor Surgeries',
       UserRole.DOCTOR,
     );
+    // AD10: uq_doctors_phone rejects two DEFAULT '' rows, so every raw insert
+    // carries a per-call unique phone (doctor series +59171..., disjoint from
+    // the patients' +59170... series).
     const rows: IdRow[] = await dataSource.query(
-      `INSERT INTO doctors (user_id, specialty, professional_license)
-       VALUES ($1, $2, $3)
+      `INSERT INTO doctors (user_id, specialty, professional_license, phone)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [userId, 'Cardiology', uniqueLicense()],
+      [userId, 'Cardiology', uniqueLicense(), `+59171${RUN_SUFFIX}${uniqueCounter++}`],
     );
     return rows[0].id;
   }
