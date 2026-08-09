@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Decimal from 'decimal.js';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
 import {
@@ -23,7 +23,7 @@ import { handleDatabaseError } from '../common/errors';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Surgery } from '../surgeries/entities/surgery.entity';
-import { CreatePaymentPlanDto } from './dto';
+import { CreatePaymentPlanDto, PaymentPlanQueryDto } from './dto';
 import { Installment, PaymentPlan } from './entities';
 import { FinancingEngine } from './financing/financing-engine';
 import { RecalculationStrategyFactory } from './strategies';
@@ -216,6 +216,48 @@ export class PaymentPlansService {
    * Read side (design section 11): office/admin may read any plan; a patient
    * only the plan of their own surgery (surgery.patient.user_id == actor).
    */
+  /**
+   * AD8/AD9 (design section 5): staff get the full paginated list, filtered
+   * by patientId/surgeryId/status; anyone else (patients AND doctors) gets
+   * the load-all-then-filter scope mirroring payments.findAll — only plans
+   * whose surgery.patient.userId is the caller's, paginated AFTER the
+   * in-memory filter so total is exact. Installments are never embedded
+   * (the list is the findOne summary shape).
+   */
+  async findAll(
+    query: PaymentPlanQueryDto,
+    currentUser: User,
+  ): Promise<{ data: PaymentPlan[]; total: number; limit: number; offset: number }> {
+    const { limit = 10, offset = 0 } = query;
+    if (this.isStaff(currentUser)) {
+      const where: FindOptionsWhere<PaymentPlan> = {};
+      if (query.patientId) where.surgery = { patientId: query.patientId };
+      if (query.surgeryId) where.surgeryId = query.surgeryId;
+      if (query.status) where.status = query.status;
+      const [data, total] = await this.paymentPlanRepository.findAndCount({
+        where,
+        relations: ['surgery', 'surgery.patient', 'surgery.surgeryCatalog'],
+        order: { startDate: 'DESC' },
+        take: limit,
+        skip: offset,
+      });
+      return { data, total, limit, offset };
+    }
+    const plans = await this.paymentPlanRepository.find({
+      relations: ['surgery', 'surgery.patient', 'surgery.surgeryCatalog'],
+      order: { startDate: 'DESC' },
+    });
+    const owned = plans.filter(
+      (plan) => plan.surgery?.patient?.userId === currentUser.id,
+    );
+    return {
+      data: owned.slice(offset, offset + limit),
+      total: owned.length,
+      limit,
+      offset,
+    };
+  }
+
   async findOne(id: string, currentUser: User): Promise<PaymentPlan> {
     const plan = await this.paymentPlanRepository.findOne({
       where: { id },
@@ -393,6 +435,12 @@ export class PaymentPlansService {
         );
       }
     }
+  }
+
+  private isStaff(currentUser: User): boolean {
+    return (
+      currentUser.role === UserRole.OFFICE || currentUser.role === UserRole.ADMIN
+    );
   }
 }
 

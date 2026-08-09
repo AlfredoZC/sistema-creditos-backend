@@ -5,12 +5,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
-import { CreatePaymentPlanDto } from './dto';
+import { CreatePaymentPlanDto, PaymentPlanQueryDto } from './dto';
 import { PaymentPlansService } from './payment-plans.service';
 
 @ApiTags('Payment Plans')
@@ -33,6 +34,15 @@ export class PaymentPlansController {
     @GetUser() user: User,
   ) {
     return this.paymentPlansService.create(createPaymentPlanDto, user);
+  }
+
+  // AD8/AD9 (design section 5): any authenticated user; staff get the full
+  // paginated list with filters, patients only their own plans (in-memory).
+  @Get()
+  @Auth()
+  @ApiResponse({ status: 200, description: 'Paginated payment plan list' })
+  findAll(@Query() query: PaymentPlanQueryDto, @GetUser() user: User) {
+    return this.paymentPlansService.findAll(query, user);
   }
 
   @Get(':id')

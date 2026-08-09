@@ -1245,4 +1245,226 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       expect(ownPlan.body.id).toBe(created.body.id);
     });
   });
+
+  describe('payment plan list (design section 5: GET /api/payment-plans)', () => {
+    function listPlans(token: string, query: Record<string, unknown>) {
+      return request(app.getHttpServer())
+        .get('/api/payment-plans')
+        .set('Authorization', `Bearer ${token}`)
+        .query(query);
+    }
+
+    async function planFor(
+      token: string,
+      patientUid: string | null,
+      totalCost: string,
+      startDate: string,
+    ): Promise<{ planId: string; surgeryId: string; patientId: string }> {
+      const patientId = await createPatientRaw(patientUid);
+      const catalog = await createCatalogEntry(token);
+      const surgeryId = await createSurgery(
+        token,
+        patientId,
+        catalog.id,
+        totalCost,
+      );
+      const created = await createPlan(token, {
+        surgeryId,
+        type: PaymentPlanType.CREDIT,
+        installmentCount: 6,
+        startDate,
+      });
+      expect(created.status).toBe(201);
+      const plans = await planRows(surgeryId);
+      return { planId: plans[0].id, surgeryId, patientId };
+    }
+
+    it('lets an office user list all plans ordered by startDate DESC', async () => {
+      const office = await officeUser();
+      const later = await planFor(office.token, null, '6000.00', '2026-06-01');
+      const earlier = await planFor(office.token, null, '4000.00', '2026-03-15');
+
+      const response = await listPlans(office.token, { limit: 100, offset: 0 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toBeInstanceOf(Array);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body.limit).toBe(100);
+      expect(response.body.offset).toBe(0);
+      const ids = response.body.data.map(
+        (plan: { id: string }) => plan.id as string,
+      );
+      expect(ids.indexOf(later.planId)).toBeLessThan(ids.indexOf(earlier.planId));
+    });
+
+    it('lets staff combine the patientId, surgeryId and status filters', async () => {
+      const office = await officeUser();
+      const planForPatient = async (
+        patientId: string,
+        totalCost: string,
+        startDate: string,
+      ): Promise<{ planId: string; surgeryId: string }> => {
+        const catalog = await createCatalogEntry(office.token);
+        const surgeryId = await createSurgery(
+          office.token,
+          patientId,
+          catalog.id,
+          totalCost,
+        );
+        const created = await createPlan(office.token, {
+          surgeryId,
+          type: PaymentPlanType.CREDIT,
+          installmentCount: 6,
+          startDate,
+        });
+        expect(created.status).toBe(201);
+        const plans = await planRows(surgeryId);
+        return { planId: plans[0].id, surgeryId };
+      };
+      const patient = await createPatientRaw();
+      const target = await planForPatient(patient, '6000.00', '2026-06-01');
+      const sibling = await planForPatient(patient, '4000.00', '2026-05-01');
+      // Same patient, second surgery, completed — every filter gets
+      // discriminating power: target stays active, its sibling is completed.
+      await dataSource.query(
+        `UPDATE payment_plans SET status = 'completed' WHERE id = $1`,
+        [sibling.planId],
+      );
+      const otherPatient = await createPatientRaw();
+      const other = await planForPatient(otherPatient, '5000.00', '2026-04-01');
+
+      const response = await listPlans(office.token, {
+        patientId: patient,
+        surgeryId: target.surgeryId,
+        status: PaymentPlanStatus.ACTIVE,
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].id).toBe(target.planId);
+
+      // Status + patientId alone also discriminate (the completed sibling).
+      const completed = await listPlans(office.token, {
+        patientId: patient,
+        status: PaymentPlanStatus.COMPLETED,
+        limit: 100,
+        offset: 0,
+      });
+      expect(completed.status).toBe(200);
+      expect(completed.body.total).toBe(1);
+      expect(completed.body.data[0].id).toBe(sibling.planId);
+      // The other patient's plans never match any staff view of this patient.
+      expect(completed.body.data[0].id).not.toBe(other.planId);
+    });
+
+    it('rejects an invalid status filter with 400', async () => {
+      const office = await officeUser();
+
+      const response = await listPlans(office.token, { status: 'invalid' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('lets a patient see ONLY their own plans, and a foreign patientId filter never leaks another patient plans', async () => {
+      const office = await officeUser();
+      const p1 = await patientUser();
+      const p2 = await patientUser();
+      const planForPatient = async (
+        patientId: string,
+        totalCost: string,
+        startDate: string,
+      ): Promise<{ planId: string; patientId: string }> => {
+        const catalog = await createCatalogEntry(office.token);
+        const surgeryId = await createSurgery(
+          office.token,
+          patientId,
+          catalog.id,
+          totalCost,
+        );
+        const created = await createPlan(office.token, {
+          surgeryId,
+          type: PaymentPlanType.CREDIT,
+          installmentCount: 6,
+          startDate,
+        });
+        expect(created.status).toBe(201);
+        const plans = await planRows(surgeryId);
+        return { planId: plans[0].id, patientId };
+      };
+      const p1PatientId = await createPatientRaw(p1.id);
+      const p2PatientId = await createPatientRaw(p2.id);
+      const p1First = await planForPatient(p1PatientId, '6000.00', '2026-06-01');
+      const p1Second = await planForPatient(p1PatientId, '4000.00', '2026-03-15');
+      const p2Only = await planForPatient(p2PatientId, '5000.00', '2026-05-01');
+
+      const response = await listPlans(p1.token, { limit: 100, offset: 0 });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map(
+        (plan: { id: string }) => plan.id as string,
+      );
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(expect.arrayContaining([p1First.planId, p1Second.planId]));
+      expect(ids).not.toContain(p2Only.planId);
+
+      // The in-memory own-scope applies regardless of filters (AD9: filters
+      // only ever apply for staff): a foreign patientId never leaks another
+      // patient's plans — the caller still sees ONLY their own.
+      const foreign = await listPlans(p1.token, {
+        patientId: p2PatientId,
+        limit: 100,
+        offset: 0,
+      });
+      expect(foreign.status).toBe(200);
+      const foreignIds = foreign.body.data.map(
+        (plan: { id: string }) => plan.id as string,
+      );
+      expect(foreignIds).toHaveLength(2);
+      expect(foreignIds).toEqual(
+        expect.arrayContaining([p1First.planId, p1Second.planId]),
+      );
+      expect(foreignIds).not.toContain(p2Only.planId);
+      expect(foreign.body.total).toBe(2);
+    });
+
+    it('returns an empty envelope for a patient with no plans', async () => {
+      const patient = await patientUser();
+      await createPatientRaw(patient.id);
+
+      const response = await listPlans(patient.token, { limit: 10, offset: 0 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ data: [], total: 0, limit: 10, offset: 0 });
+    });
+
+    it('returns summary rows without embedded installments', async () => {
+      const office = await officeUser();
+      const created = await planFor(office.token, null, '6000.00', '2026-06-01');
+
+      const response = await listPlans(office.token, {
+        patientId: created.patientId,
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      const row = response.body.data[0];
+      expect(row.id).toBe(created.planId);
+      expect(row).not.toHaveProperty('installments');
+      expect(row.surgery.id).toBe(created.surgeryId);
+      expect(row.surgery.patient.id).toBe(created.patientId);
+      expect(row.surgery.surgeryCatalog).toBeDefined();
+    });
+
+    it('rejects unauthenticated list requests with 401', async () => {
+      const response = await request(app.getHttpServer()).get(
+        '/api/payment-plans',
+      );
+      expect(response.status).toBe(401);
+    });
+  });
 });
