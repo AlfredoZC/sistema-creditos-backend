@@ -1,0 +1,89 @@
+# Stack completo para usar la aplicacion en local: base, API y frontend.
+#
+# El `docker-compose.yaml` de al lado levanta SOLO la base, para desarrollar con
+# `npm run start:dev` y hot reload. Este otro levanta todo ya construido, que es
+# lo que sirve para usar el sistema sin tener Node instalado.
+#
+# El frontend se construye desde el repo hermano `sistema-creditos`: si lo
+# clonaste en otra ruta, ajustar `context`.
+#
+#   docker compose -f docker-compose.app.yaml up -d --build
+#
+# Despues, una sola vez, cargar los datos de prueba:
+#   curl http://localhost:3001/api/seed
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: creditos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: rootpassword
+      POSTGRES_DB: db_creditos
+    ports:
+      # Publicado para poder inspeccionar la base con un cliente externo.
+      - "5439:5432"
+    volumes:
+      - creditos_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d db_creditos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+    container_name: creditos_api
+    restart: unless-stopped
+    # La API corre migraciones al arrancar: si empieza antes de que Postgres
+    # acepte conexiones, muere en el primer query.
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: db_creditos
+      DB_USERNAME: root
+      DB_PASSWORD: rootpassword
+      PORT: 3000
+      HOST_API: http://localhost:3001/api
+      # El navegador pide desde http://localhost:8080, que es donde publica el
+      # frontend; sin este origen declarado, cada llamada se bloquea por CORS.
+      CORS_ORIGINS: http://localhost:8080
+      JWT_SECRET: cambia-este-secreto-en-serio
+      # mock: no sale ningun WhatsApp real. Para usar Meta hacen falta
+      # credenciales propias (ver .env.template).
+      WHATSAPP_PROVIDER: mock
+      WHATSAPP_TOKEN: local-token
+      WHATSAPP_PHONE_NUMBER_ID: local-phone
+      WHATSAPP_APP_SECRET: local-secret
+      WHATSAPP_VERIFY_TOKEN: local-verify
+      WHATSAPP_WABA_ID: local-waba
+      WHATSAPP_WEBHOOK_PATH: whatsapp/webhook
+      REMINDER_TEMPLATE_DUE_SOON: payment_reminder
+      REMINDER_TEMPLATE_OVERDUE: payment_overdue
+      REMINDER_MAX_PER_RUN: "200"
+    ports:
+      # 3001 en el host: el 3000 suele estar ocupado por otro proyecto.
+      - "3001:3000"
+
+  web:
+    build:
+      context: ../sistema-creditos
+      args:
+        # Vite incrusta esto en el bundle al compilar: es la URL que va a usar
+        # el NAVEGADOR, por eso es localhost y no el nombre del servicio.
+        VITE_API_URL: http://localhost:3001/api
+    container_name: creditos_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  creditos_pgdata:
+    name: creditos_pgdata

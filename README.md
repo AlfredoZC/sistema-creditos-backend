@@ -162,3 +162,48 @@ el rol del token.
 
 El paciente se resuelve por `patients.user_id` a partir del token; nunca por un
 id que venga en la request.
+
+---
+
+## Usar el sistema con Docker (todo en contenedores)
+
+Para **usar** la aplicacion, sin instalar Node ni levantar nada a mano. Levanta
+base, API y frontend ya construidos:
+
+```bash
+docker compose -f docker-compose.app.yaml up -d --build
+curl http://localhost:3001/api/seed     # una sola vez: datos de prueba
+```
+
+| Servicio | URL |
+|---|---|
+| Aplicacion | http://localhost:8080 |
+| API | http://localhost:3001/api |
+| Documentacion de la API (Swagger) | http://localhost:3001/api |
+| Base de datos | localhost:5439 (`root` / `rootpassword`) |
+
+Para apagarlo: `docker compose -f docker-compose.app.yaml down`. Los datos
+sobreviven en el volumen `creditos_pgdata`; para empezar de cero,
+`docker compose -f docker-compose.app.yaml down -v`.
+
+El `docker-compose.yaml` (sin `.app`) sigue siendo el de desarrollo: levanta
+solo la base, para trabajar con `npm run start:dev` y recarga en caliente.
+
+**Dos detalles que importan si se cambian los puertos:**
+
+- La API publica en **3001** porque el 3000 suele estar ocupado. Si se cambia,
+  hay que reconstruir la imagen del frontend: Vite incrusta `VITE_API_URL` en el
+  bundle al compilar, no la lee en tiempo de ejecucion.
+- `CORS_ORIGINS` tiene que incluir la URL desde donde el navegador abre la app
+  (por defecto `http://localhost:8080`), o cada llamada se bloquea.
+
+### Cuentas de prueba
+
+Todas con la contrasena `Abc123`:
+
+| Rol | Email | Que ve |
+|---|---|---|
+| Admin | `admin0@seed.local` | Todo, incluido el disparo manual de recordatorios |
+| Oficina | `ana1@seed.local`, `carlos2@seed.local`, `daniel3@seed.local` | Gestion completa y cobranza |
+| Medico | `elena4@seed.local`, `fernando5@seed.local`, `gloria6@seed.local` | Solo sus cirugias asignadas |
+| Paciente | `hector7@seed.local`, `isabel8@seed.local`, `jorge9@seed.local` | Solo sus planes, cuotas y cirugias |
