@@ -90,3 +90,71 @@ npm run migration:run
 Las migraciones se aplican manualmente y nunca automáticamente al iniciar la aplicación (`migrationsRun: false`).
 
 > **Nota**: si la base de datos local ya fue creada con `synchronize: true`, regenerar la base de datos desde cero (o borrar su esquema) y aplicar `migration:run` para dejar la línea de base (`Init`) registrada.
+
+---
+
+## Ejecucion local completa (API + base + frontend)
+
+```bash
+docker volume create plataforma-creditos_pgdata   # solo la primera vez
+docker-compose up -d                              # Postgres 18 en localhost:5439
+cp .env.template .env                             # revisar credenciales
+npm install
+npm run migration:run                             # aplica las 6 migraciones
+npm run start:dev                                 # API en http://localhost:3000/api
+```
+
+Cargar datos de prueba: abrir `http://localhost:3000/api/seed`.
+Documentacion interactiva de todos los endpoints: `http://localhost:3000/api`.
+
+El frontend (`sistema-creditos`) corre con `npm run dev` en
+`http://localhost:5173`, que es uno de los origenes permitidos por defecto en
+CORS. Si se sirve desde otro puerto u host, hay que declararlo en
+`CORS_ORIGINS`.
+
+## Reportes de cobranza
+
+| Endpoint | Rol | Devuelve |
+|---|---|---|
+| `GET /api/reports/summary?from=&to=` | office, admin | Recaudado del rango, pendiente de confirmacion, cartera vigente, mora, vencimientos a 7 dias y planes por estado. Sin parametros, el rango es el mes en curso |
+| `GET /api/reports/overdue-installments?limit=&offset=` | office, admin | Cola de cobranza: cuotas vencidas sin saldar con paciente, telefono, saldo y dias de atraso, de la mas atrasada a la menos |
+
+Los montos viajan como string decimal con dos decimales, igual que en el resto
+de la API.
+
+## Recordatorios automaticos
+
+Un job diario (9 AM) manda por WhatsApp dos tipos de aviso:
+
+- `due_soon`: la cuota vence en 3 dias.
+- `overdue`: la cuota ya vencio.
+
+Se puede disparar a mano con `POST /api/reminders/run` (solo admin), que
+devuelve `{ dueSoon, overdue, skipped, failed }`.
+
+**Es idempotente por base de datos**: antes de despachar se inserta una fila en
+`installment_reminders`, cuya UNIQUE `(installment_id, kind)` impide que una
+segunda corrida -o dos instancias a la vez- manden el mismo aviso dos veces.
+Para forzar un reenvio hay que borrar esa fila.
+
+Las plantillas se resuelven por nombre y son configurables
+(`REMINDER_TEMPLATE_DUE_SOON`, `REMINDER_TEMPLATE_OVERDUE`). Ambas deben existir
+en `message_templates` con `status='approved'` e `is_active=true`, y declarar
+exactamente tres placeholders: `{{1}}` nombre, `{{2}}` numero de cuota y `{{3}}`
+fecha de vencimiento. El seed crea `payment_reminder` y `payment_overdue`.
+
+Con `WHATSAPP_PROVIDER=mock` (default) no sale ningun mensaje real.
+
+## Portales de paciente y doctor
+
+No hay un prefijo `/portal`: los mismos endpoints recortan el resultado segun
+el rol del token.
+
+| Rol | Ve |
+|---|---|
+| `patient` | Sus cirugias (`GET /api/surgeries`, `GET /api/surgeries/:id`), sus planes y cuotas (`GET /api/payment-plans...`), su historial de pagos y puede registrar un pago, que queda `pending_confirmation` |
+| `doctor` | Solo las cirugias donde esta asignado, con cualquier rol de asignacion. NO ve planes, cuotas ni deuda de los pacientes |
+| `office`, `admin` | Todo, incluidas las escrituras |
+
+El paciente se resuelve por `patients.user_id` a partir del token; nunca por un
+id que venga en la request.
