@@ -6,10 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
-import { SurgeryDoctorRole, UserRole } from '../common/enums';
+import { SurgeryDoctorRole, SurgeryStatus, UserRole } from '../common/enums';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { handleDatabaseError } from '../common/errors';
 import { Doctor } from '../doctors/entities/doctor.entity';
@@ -20,11 +20,13 @@ import {
   CreateSurgeryDto,
   ReassignPrincipalDto,
   UpdateSurgeryDto,
+  UpdateSurgeryNotesDto,
   UpdateSurgeryStatusDto,
 } from './dto';
 import { Surgery, SurgeryDoctor } from './entities';
 
 const AUDIT_ACTION_STATUS_CHANGED = 'surgery.status_changed';
+const AUDIT_ACTION_NOTES_CHANGED = 'surgery.notes_changed';
 const AUDIT_TABLE_SURGERIES = 'surgeries';
 
 @Injectable()
@@ -116,6 +118,18 @@ export class SurgeriesService {
         const surgery = await manager.findOne(Surgery, { where: { id } });
         if (!surgery) throw new NotFoundException('Surgery not found');
 
+        // El auxiliar asiste, el encargado responde: un medico solo puede dar
+        // por realizada la cirugia que encabeza. Cancelar queda fuera de su
+        // alcance porque arrastra el plan de pago del paciente.
+        if (currentUser.role === UserRole.DOCTOR) {
+          if (updateSurgeryStatusDto.status !== SurgeryStatus.PERFORMED) {
+            throw new ForbiddenException(
+              'Un medico solo puede marcar la cirugia como realizada',
+            );
+          }
+          await this.assertIsPrincipalDoctor(manager, id, currentUser.id);
+        }
+
         const previousData = { status: surgery.status };
         surgery.status = updateSurgeryStatusDto.status;
         await manager.save(surgery);
@@ -133,6 +147,71 @@ export class SurgeriesService {
     } catch (error) {
       if (error instanceof HttpException) throw error;
       handleDatabaseError(error);
+    }
+  }
+
+  /**
+   * Nota quirurgica. Endpoint aparte del update general porque aquel permite
+   * tocar el costo total, y el medico no debe poder hacerlo ni por accidente.
+   */
+  async updateNotes(
+    id: string,
+    updateSurgeryNotesDto: UpdateSurgeryNotesDto,
+    currentUser: User,
+  ): Promise<Surgery> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const surgery = await manager.findOne(Surgery, { where: { id } });
+        if (!surgery) throw new NotFoundException('Surgery not found');
+
+        if (currentUser.role === UserRole.DOCTOR) {
+          await this.assertIsPrincipalDoctor(manager, id, currentUser.id);
+        }
+
+        const previousData = { notes: surgery.notes };
+        surgery.notes = updateSurgeryNotesDto.notes;
+        await manager.save(surgery);
+
+        await this.auditService.log(manager, {
+          userId: currentUser.id,
+          action: AUDIT_ACTION_NOTES_CHANGED,
+          tableName: AUDIT_TABLE_SURGERIES,
+          recordId: surgery.id,
+          previousData,
+          newData: { notes: surgery.notes },
+        });
+        return surgery;
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
+  /**
+   * Falla con 403 salvo que el usuario sea el medico asignado como principal.
+   * Un asistente o un anestesiologo de la misma cirugia tampoco pasan.
+   */
+  private async assertIsPrincipalDoctor(
+    manager: EntityManager,
+    surgeryId: string,
+    userId: string,
+  ): Promise<void> {
+    const rows: { exists: boolean }[] = await manager.query(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM surgery_doctors sd
+           JOIN doctors d ON d.id = sd.doctor_id
+          WHERE sd.surgery_id = $1
+            AND d.user_id = $2
+            AND sd.role = 'principal'
+       ) AS exists`,
+      [surgeryId, userId],
+    );
+    if (!rows[0].exists) {
+      throw new ForbiddenException(
+        'Solo el cirujano principal de esta cirugia puede hacerlo',
+      );
     }
   }
 

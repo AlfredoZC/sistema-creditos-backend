@@ -18,6 +18,7 @@ import {
   CreateSurgeryDto,
   ReassignPrincipalDto,
   UpdateSurgeryDto,
+  UpdateSurgeryNotesDto,
   UpdateSurgeryStatusDto,
 } from './dto';
 import { SurgeriesService } from './surgeries.service';
@@ -73,19 +74,43 @@ export class SurgeriesController {
     return this.surgeriesService.update(id, updateSurgeryDto);
   }
 
+  // El medico entra aca tambien: el servicio lo limita a marcar como realizada
+  // la cirugia que encabeza como principal.
   @Patch(':id/status')
-  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @Auth(UserRole.DOCTOR, UserRole.OFFICE, UserRole.ADMIN)
   @ApiResponse({
     status: 200,
     description: 'Surgery status updated and audited',
   })
   @ApiResponse({ status: 400, description: 'Invalid status value' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'A doctor can only mark as performed a surgery they lead as principal',
+  })
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSurgeryStatusDto: UpdateSurgeryStatusDto,
     @GetUser() user: User,
   ) {
     return this.surgeriesService.updateStatus(id, updateSurgeryStatusDto, user);
+  }
+
+  // Nota quirurgica: la escribe el cirujano principal o el staff. Va aparte del
+  // PATCH general porque aquel permite tocar el costo total.
+  @Patch(':id/notes')
+  @Auth(UserRole.DOCTOR, UserRole.OFFICE, UserRole.ADMIN)
+  @ApiResponse({ status: 200, description: 'Surgical note saved and audited' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the principal surgeon or the staff can write the note',
+  })
+  updateNotes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateSurgeryNotesDto: UpdateSurgeryNotesDto,
+    @GetUser() user: User,
+  ) {
+    return this.surgeriesService.updateNotes(id, updateSurgeryNotesDto, user);
   }
 
   @Post(':id/doctors')

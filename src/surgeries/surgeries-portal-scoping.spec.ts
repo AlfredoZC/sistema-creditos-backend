@@ -213,7 +213,8 @@ describe('surgery scoping for the patient and doctor portals', () => {
     expect(ids).toContain(surgeryBId);
   });
 
-  it('keeps write operations closed to patients and doctors', async () => {
+  it('keeps administrative writes closed to patients and doctors', async () => {
+    // El PATCH general permite tocar el costo total: administrativo, staff.
     await request(app.getHttpServer())
       .patch(`/api/surgeries/${surgeryAId}`)
       .set('Authorization', `Bearer ${patientAToken}`)
@@ -221,9 +222,27 @@ describe('surgery scoping for the patient and doctor portals', () => {
       .expect(403);
 
     await request(app.getHttpServer())
+      .patch(`/api/surgeries/${surgeryAId}`)
+      .set('Authorization', `Bearer ${doctorAToken}`)
+      .send({ totalCost: '1.00' })
+      .expect(403);
+
+    // El paciente no cambia el estado de su propia cirugia.
+    await request(app.getHttpServer())
+      .patch(`/api/surgeries/${surgeryAId}/status`)
+      .set('Authorization', `Bearer ${patientAToken}`)
+      .send({ status: 'performed' })
+      .expect(403);
+  });
+
+  // CAMBIO DE CONTRATO: el cirujano principal si puede dar por realizada la
+  // cirugia que encabeza. El detalle de la regla -asistentes excluidos,
+  // cancelar prohibido- vive en surgeries-doctor-actions.spec.ts.
+  it('lets the principal doctor mark their own surgery as performed', async () => {
+    await request(app.getHttpServer())
       .patch(`/api/surgeries/${surgeryAId}/status`)
       .set('Authorization', `Bearer ${doctorAToken}`)
       .send({ status: 'performed' })
-      .expect(403);
+      .expect(200);
   });
 });

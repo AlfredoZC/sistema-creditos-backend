@@ -30,7 +30,7 @@ function isoDaysFromToday(days: number): string {
  * Decision de producto del portal del doctor: el doctor ve sus cirugias y los
  * datos de contacto del paciente, NO su deuda ni sus cuotas.
  */
-describe('payment plan access is closed to doctors', () => {
+describe('payment plan access for a doctor outside the surgery', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let jwtService: JwtService;
@@ -118,14 +118,14 @@ describe('payment plan access is closed to doctors', () => {
     return planRows[0].id;
   }
 
-  it('forbids a doctor from reading a payment plan detail', async () => {
+  it('forbids a doctor who is not assigned to the surgery', async () => {
     await request(app.getHttpServer())
       .get(`/api/payment-plans/${planId}`)
       .set('Authorization', `Bearer ${doctorToken}`)
       .expect(403);
   });
 
-  it('forbids a doctor from reading the installment schedule', async () => {
+  it('forbids that doctor from reading the installment schedule', async () => {
     await request(app.getHttpServer())
       .get(`/api/payment-plans/${planId}/installments`)
       .set('Authorization', `Bearer ${doctorToken}`)

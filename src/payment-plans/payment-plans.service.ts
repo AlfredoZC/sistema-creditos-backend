@@ -260,8 +260,19 @@ export class PaymentPlansService {
       relations: ['surgery', 'surgery.patient', 'surgery.surgeryCatalog'],
       order: { startDate: 'DESC' },
     });
-    const owned = plans.filter(
-      (plan) => plan.surgery?.patient?.userId === currentUser.id,
+
+    // Un medico ve los planes de las cirugias donde esta asignado; un paciente,
+    // los suyos. Se resuelven los ids de cirugia del medico en un solo query en
+    // vez de preguntar plan por plan.
+    const visibleSurgeryIds =
+      currentUser.role === UserRole.DOCTOR
+        ? await this.surgeryIdsAssignedTo(currentUser.id)
+        : null;
+
+    const owned = plans.filter((plan) =>
+      visibleSurgeryIds
+        ? visibleSurgeryIds.has(plan.surgeryId)
+        : plan.surgery?.patient?.userId === currentUser.id,
     );
     return {
       data: owned.slice(offset, offset + limit),
@@ -271,13 +282,24 @@ export class PaymentPlansService {
     };
   }
 
+  private async surgeryIdsAssignedTo(userId: string): Promise<Set<string>> {
+    const rows: { surgery_id: string }[] = await this.dataSource.query(
+      `SELECT sd.surgery_id
+         FROM surgery_doctors sd
+         JOIN doctors d ON d.id = sd.doctor_id
+        WHERE d.user_id = $1`,
+      [userId],
+    );
+    return new Set(rows.map((row) => row.surgery_id));
+  }
+
   async findOne(id: string, currentUser: User): Promise<PaymentPlan> {
     const plan = await this.paymentPlanRepository.findOne({
       where: { id },
       relations: ['surgery', 'surgery.patient'],
     });
     if (!plan) throw new NotFoundException('Payment plan not found');
-    this.assertPatientOwnsPlanOrStaff(plan, currentUser);
+    await this.assertPatientOwnsPlanOrStaff(plan, currentUser);
     return plan;
   }
 
@@ -290,7 +312,7 @@ export class PaymentPlansService {
       relations: ['surgery', 'surgery.patient'],
     });
     if (!plan) throw new NotFoundException('Payment plan not found');
-    this.assertPatientOwnsPlanOrStaff(plan, currentUser);
+    await this.assertPatientOwnsPlanOrStaff(plan, currentUser);
 
     const installments = await this.installmentRepository.find({
       where: { paymentPlanId: id },
@@ -437,17 +459,22 @@ export class PaymentPlansService {
   }
 
   /**
-   * Denegar por defecto: solo pasan el staff y el paciente dueño del plan.
+   * Denegar por defecto. Pasan tres:
    *
-   * Antes solo se rechazaba al rol `patient`, asi que cualquier otro rol
-   * no-staff -en la practica, `doctor`- caia en la rama permisiva y podia leer
-   * la situacion financiera completa de un paciente ajeno. El portal del
-   * doctor muestra cirugias y contacto, nunca deuda.
+   * - el staff,
+   * - el paciente dueño del plan,
+   * - el equipo medico de la cirugia que origino el plan.
+   *
+   * Lo tercero es una regla de negocio del portal del medico: supervisa el
+   * avance de pago de SUS pacientes. La frontera es la asignacion a la cirugia,
+   * no el rol dentro de ella —un asistente tambien necesita saber si el
+   * paciente al que va a operar esta al dia—. Fuera de esa asignacion, un
+   * medico no ve absolutamente nada.
    */
-  private assertPatientOwnsPlanOrStaff(
+  private async assertPatientOwnsPlanOrStaff(
     plan: PaymentPlan,
     currentUser: User,
-  ): void {
+  ): Promise<void> {
     if (this.isStaff(currentUser)) return;
 
     const ownerUserId = plan.surgery?.patient?.userId ?? null;
@@ -458,9 +485,32 @@ export class PaymentPlansService {
       return;
     }
 
+    if (
+      currentUser.role === UserRole.DOCTOR &&
+      (await this.isAssignedToSurgery(plan.surgeryId, currentUser.id))
+    ) {
+      return;
+    }
+
     throw new ForbiddenException(
-      'Patients can only access their own payment plans',
+      'Solo el paciente dueño del plan y el equipo medico de su cirugia pueden verlo',
     );
+  }
+
+  private async isAssignedToSurgery(
+    surgeryId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const rows: { exists: boolean }[] = await this.dataSource.query(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM surgery_doctors sd
+           JOIN doctors d ON d.id = sd.doctor_id
+          WHERE sd.surgery_id = $1 AND d.user_id = $2
+       ) AS exists`,
+      [surgeryId, userId],
+    );
+    return rows[0].exists;
   }
 
   private isStaff(currentUser: User): boolean {
