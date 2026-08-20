@@ -412,6 +412,7 @@ const TEMPLATE_REMINDER_ID = '90000000-0000-4000-8000-000000000001';
 const TEMPLATE_SURGERY_ID = '90000000-0000-4000-8000-000000000002';
 const TEMPLATE_WELCOME_ID = '90000000-0000-4000-8000-000000000003';
 const TEMPLATE_FEEDBACK_ID = '90000000-0000-4000-8000-000000000004';
+const TEMPLATE_OVERDUE_ID = '90000000-0000-4000-8000-000000000005';
 
 const DISPATCH_IDS = [
   'a1000000-0000-4000-8000-000000000001',
@@ -1235,6 +1236,22 @@ const MESSAGE_TEMPLATES: SeedMessageTemplate[] = [
     sampleVariables: { '1': 'Hector Rojas', '2': '3', '3': '2026-09-01' },
     status: TemplateStatus.APPROVED,
     providerTemplateId: 'HBT_PAYMENT_REMINDER',
+    providerStatus: 'approved',
+    isActive: true,
+    createdByUserId: ADMIN_USER_ID,
+  },
+  {
+    // Hermana de payment_reminder para cuotas YA vencidas: el job diario de
+    // recordatorios resuelve las plantillas por nombre y necesita las dos.
+    id: TEMPLATE_OVERDUE_ID,
+    name: 'payment_overdue',
+    category: TemplateCategory.UTILITY,
+    language: 'es',
+    bodyTemplate:
+      'Estimado(a) {{1}}, su cuota {{2}} vencio el {{3}}. Comuniquese con nosotros para regularizar su pago.',
+    sampleVariables: { '1': 'Hector Rojas', '2': '2', '3': '2026-07-01' },
+    status: TemplateStatus.APPROVED,
+    providerTemplateId: 'HBT_PAYMENT_OVERDUE',
     providerStatus: 'approved',
     isActive: true,
     createdByUserId: ADMIN_USER_ID,

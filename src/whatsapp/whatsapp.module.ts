@@ -57,6 +57,14 @@ import { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
       inject: [ConfigService],
     },
   ],
-  exports: [TypeOrmModule, WHATSAPP_PROVIDER, TemplatesService],
+  // DispatchesService se exporta para RemindersModule: el job diario reusa el
+  // mismo camino de despacho que el disparo manual, sin duplicar la logica de
+  // dedupe, reintentos ni auditoria.
+  exports: [
+    TypeOrmModule,
+    WHATSAPP_PROVIDER,
+    TemplatesService,
+    DispatchesService,
+  ],
 })
 export class WhatsappModule {}

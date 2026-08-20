@@ -241,12 +241,12 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('migrates a fresh database cleanly from Init', async () => {
-    // 5 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot,
-    // 004-DoctorDetails.
+    // 6 migrations: Init, 001-AuthSingleRole, 002-CoreModules, 003-WhatsAppBot,
+    // 004-DoctorDetails, 005-InstallmentReminders.
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(5);
+    expect(applied[0].count).toBe(6);
 
     for (const tableName of Object.keys(EXPECTED_TABLE_COLUMNS)) {
       if (tableName === 'payment_methods') {

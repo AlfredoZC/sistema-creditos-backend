@@ -15,6 +15,7 @@ import { SurgeriesModule } from './surgeries/surgeries.module';
 import { ProfileModule } from './profile/profile.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { ReportsModule } from './reports/reports.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
@@ -53,6 +54,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     ProfileModule,
     CloudinaryModule,
     ReportsModule,
+    RemindersModule,
   ],
 })
 export class AppModule {}

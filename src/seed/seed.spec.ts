@@ -102,7 +102,7 @@ describe('seed (whole-system demo data, design section 9)', () => {
     expect(await countRowsIn('installments')).toBe(48);
     expect(await countRowsIn('payments')).toBe(11);
     expect(await countRowsIn('audit_logs')).toBe(12);
-    expect(await countRowsIn('message_templates')).toBe(4);
+    expect(await countRowsIn('message_templates')).toBe(5);
     expect(await countRowsIn('whatsapp_dispatches')).toBe(6);
     expect(await countRowsIn('bot_conversations')).toBe(5);
     expect(await countRowsIn('bot_messages')).toBe(10);
@@ -200,7 +200,8 @@ describe('seed (whole-system demo data, design section 9)', () => {
       `SELECT COUNT(*)::int AS count FROM message_templates
        WHERE category = 'utility' AND status = 'approved' AND is_active = true`,
     );
-    expect(approvedUtility[0].count).toBe(1);
+    // payment_reminder + payment_overdue: las dos que usa el job diario.
+    expect(approvedUtility[0].count).toBe(2);
     const drafts: CountRow[] = await dataSource.query(
       `SELECT COUNT(*)::int AS count FROM message_templates WHERE status = 'draft'`,
     );

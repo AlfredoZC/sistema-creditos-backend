@@ -7,6 +7,7 @@ export * from './payment-plan-status.enum';
 export * from './payment-plan-type.enum';
 export * from './payment-status.enum';
 export * from './payment-type.enum';
+export * from './reminder-kind.enum';
 export * from './surgery-doctor-role.enum';
 export * from './surgery-status.enum';
 export * from './template-category.enum';

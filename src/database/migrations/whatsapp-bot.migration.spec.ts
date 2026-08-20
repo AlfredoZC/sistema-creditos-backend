@@ -252,7 +252,7 @@ describe('whatsapp bot migration 003 contract (design sections 4 and 5)', () => 
     const applied: { count: number }[] = await dataSource.query(
       `SELECT count(*)::int AS count FROM migrations`,
     );
-    expect(applied[0].count).toBe(5);
+    expect(applied[0].count).toBe(6);
   });
 
   it('creates the four business tables with their design columns', async () => {
@@ -490,6 +490,7 @@ describe('whatsapp bot migration 003 contract (design sections 4 and 5)', () => 
     'down() restores original phones, drops the backup table, the four ' +
       'business tables, and the five enum types',
     async () => {
+      await dataSource.undoLastMigration(); // reverts 005 (InstallmentReminders)
       await dataSource.undoLastMigration(); // reverts 004 (DoctorDetails)
       await dataSource.undoLastMigration(); // reverts 003 (WhatsAppBot)
 
