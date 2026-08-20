@@ -143,6 +143,10 @@ en `message_templates` con `status='approved'` e `is_active=true`, y declarar
 exactamente tres placeholders: `{{1}}` nombre, `{{2}}` numero de cuota y `{{3}}`
 fecha de vencimiento. El seed crea `payment_reminder` y `payment_overdue`.
 
+Cada corrida despacha como maximo `REMINDER_MAX_PER_RUN` avisos por tipo (200
+por defecto): con mora acumulada, la primera corrida no intenta mandar miles de
+mensajes de una sentada, y el atraso se drena en las corridas siguientes.
+
 Con `WHATSAPP_PROVIDER=mock` (default) no sale ningun mensaje real.
 
 ## Portales de paciente y doctor
