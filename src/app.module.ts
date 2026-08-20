@@ -14,6 +14,7 @@ import { SurgeryCatalogModule } from './surgery-catalog/surgery-catalog.module';
 import { SurgeriesModule } from './surgeries/surgeries.module';
 import { ProfileModule } from './profile/profile.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { ReportsModule } from './reports/reports.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
@@ -51,6 +52,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     SeedModule,
     ProfileModule,
     CloudinaryModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}
