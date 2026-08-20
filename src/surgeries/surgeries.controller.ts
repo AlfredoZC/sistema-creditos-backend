@@ -38,11 +38,25 @@ export class SurgeriesController {
     return this.surgeriesService.create(createSurgeryDto);
   }
 
+  // Abierto a cualquier autenticado: el servicio recorta el resultado segun el
+  // rol (paciente -> las suyas, doctor -> donde esta asignado, staff -> todas).
   @Get()
-  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @Auth()
   @ApiResponse({ status: 200, description: 'Paginated surgery list' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.surgeriesService.findAll(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
+    return this.surgeriesService.findAll(paginationDto, user);
+  }
+
+  @Get(':id')
+  @Auth()
+  @ApiResponse({ status: 200, description: 'Surgery detail' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Patients and doctors can only access surgeries that belong to them',
+  })
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.surgeriesService.findOne(id, user);
   }
 
   @Patch(':id')

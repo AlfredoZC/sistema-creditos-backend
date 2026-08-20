@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException,
@@ -8,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
-import { SurgeryDoctorRole } from '../common/enums';
+import { SurgeryDoctorRole, UserRole } from '../common/enums';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { handleDatabaseError } from '../common/errors';
 import { Doctor } from '../doctors/entities/doctor.entity';
@@ -245,7 +246,19 @@ export class SurgeriesService {
    * with the surgeryDoctors hasMany, which would double-count rows), so total
    * equals the real surgery count regardless of how many doctors are assigned.
    */
-  async findAll(paginationDto: PaginationDto) {
+  /**
+   * Listado con scoping por rol (portales de paciente y doctor):
+   *
+   * - staff (office/admin): todas las cirugias.
+   * - paciente: solo las suyas, resueltas por `patients.user_id` desde el
+   *   token. Nunca por un id que venga en la request.
+   * - doctor: solo aquellas donde figura asignado, con cualquier rol
+   *   (principal, asistente o anestesiologo).
+   *
+   * El filtro va en el WHERE del query, no en memoria: si filtrara despues de
+   * traer, la paginacion devolveria paginas incompletas y el total mentiria.
+   */
+  async findAll(paginationDto: PaginationDto, currentUser: User) {
     const { limit = 10, offset = 0 } = paginationDto;
     const query = this.surgeryRepository
       .createQueryBuilder('surgery')
@@ -256,8 +269,75 @@ export class SurgeriesService {
       .orderBy('surgery.scheduledDate', 'DESC')
       .take(limit)
       .skip(offset);
+
+    if (currentUser.role === UserRole.PATIENT) {
+      query.andWhere('patient.user_id = :userId', { userId: currentUser.id });
+    } else if (currentUser.role === UserRole.DOCTOR) {
+      query.andWhere(
+        `EXISTS (
+           SELECT 1
+             FROM surgery_doctors sd
+             JOIN doctors d ON d.id = sd.doctor_id
+            WHERE sd.surgery_id = surgery.id
+              AND d.user_id = :userId
+         )`,
+        { userId: currentUser.id },
+      );
+    }
+
     const [data, total] = await query.getManyAndCount();
     return { data, total, limit, offset };
+  }
+
+  /**
+   * Detalle de una cirugia. Un paciente solo puede leer la suya y un doctor
+   * solo aquellas donde esta asignado; cualquier otro caso es 403, nunca 404,
+   * para no filtrar por diferencia si el id existe.
+   */
+  async findOne(id: string, currentUser: User): Promise<Surgery> {
+    const surgery = await this.surgeryRepository.findOne({
+      where: { id },
+      relations: [
+        'patient',
+        'surgeryCatalog',
+        'surgeryDoctors',
+        'surgeryDoctors.doctor',
+      ],
+    });
+    if (!surgery) throw new NotFoundException('Surgery not found');
+    await this.assertCanRead(surgery, currentUser);
+    return surgery;
+  }
+
+  private async assertCanRead(
+    surgery: Surgery,
+    currentUser: User,
+  ): Promise<void> {
+    if (
+      currentUser.role === UserRole.OFFICE ||
+      currentUser.role === UserRole.ADMIN
+    ) {
+      return;
+    }
+
+    if (currentUser.role === UserRole.PATIENT) {
+      if (surgery.patient?.userId === currentUser.id) return;
+      throw new ForbiddenException(
+        'Patients can only access their own surgeries',
+      );
+    }
+
+    if (currentUser.role === UserRole.DOCTOR) {
+      const assigned = (surgery.surgeryDoctors ?? []).some(
+        (assignment) => assignment.doctor?.userId === currentUser.id,
+      );
+      if (assigned) return;
+      throw new ForbiddenException(
+        'Doctors can only access surgeries they are assigned to',
+      );
+    }
+
+    throw new ForbiddenException('Not allowed to access this surgery');
   }
 
   private async assertNoPaymentPlan(surgeryId: string): Promise<void> {

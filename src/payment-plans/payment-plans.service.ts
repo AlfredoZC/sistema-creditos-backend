@@ -436,18 +436,31 @@ export class PaymentPlansService {
     return financedAmount.toFixed(MONEY_DECIMALS);
   }
 
+  /**
+   * Denegar por defecto: solo pasan el staff y el paciente dueño del plan.
+   *
+   * Antes solo se rechazaba al rol `patient`, asi que cualquier otro rol
+   * no-staff -en la practica, `doctor`- caia en la rama permisiva y podia leer
+   * la situacion financiera completa de un paciente ajeno. El portal del
+   * doctor muestra cirugias y contacto, nunca deuda.
+   */
   private assertPatientOwnsPlanOrStaff(
     plan: PaymentPlan,
     currentUser: User,
   ): void {
-    if (currentUser.role === UserRole.PATIENT) {
-      const ownerUserId = plan.surgery?.patient?.userId ?? null;
-      if (ownerUserId !== currentUser.id) {
-        throw new ForbiddenException(
-          'Patients can only access their own payment plans',
-        );
-      }
+    if (this.isStaff(currentUser)) return;
+
+    const ownerUserId = plan.surgery?.patient?.userId ?? null;
+    if (
+      currentUser.role === UserRole.PATIENT &&
+      ownerUserId === currentUser.id
+    ) {
+      return;
     }
+
+    throw new ForbiddenException(
+      'Patients can only access their own payment plans',
+    );
   }
 
   private isStaff(currentUser: User): boolean {

@@ -1039,7 +1039,7 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
     });
   });
 
-  describe('surgery list (design section 4: staff-only GET /api/surgeries)', () => {
+  describe('surgery list (GET /api/surgeries, recortado por rol)', () => {
     function listSurgeries(token: string, query: Record<string, unknown>) {
       return request(app.getHttpServer())
         .get('/api/surgeries')
@@ -1183,15 +1183,21 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       expect(paged.filter((id) => id === light.body.id)).toHaveLength(1);
     });
 
-    it('forbids patient-role users from listing surgeries (403)', async () => {
+    // CAMBIO DE CONTRATO (portales de paciente y doctor): el listado dejo de
+    // ser staff-only. Ahora responde 200 con el resultado recortado por rol.
+    // La garantia de aislamiento -que nadie vea lo ajeno- se verifica en
+    // surgeries-portal-scoping.spec.ts.
+    it('returns an empty list to a patient with no surgeries', async () => {
       const patient = await patientToken();
 
       const response = await listSurgeries(patient, { limit: 10, offset: 0 });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(0);
+      expect(response.body.total).toBe(0);
     });
 
-    it('forbids doctor-role users from listing surgeries (403)', async () => {
+    it('returns an empty list to a doctor with no assignments', async () => {
       const doctorUserId = await insertUserRaw(
         emailFor(`doctor.list.surgeries.${uniqueCounter++}`),
         'Doctor List Surgeries',
@@ -1203,7 +1209,9 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
         offset: 0,
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(0);
+      expect(response.body.total).toBe(0);
     });
 
     it('rejects unauthenticated list requests with 401', async () => {
