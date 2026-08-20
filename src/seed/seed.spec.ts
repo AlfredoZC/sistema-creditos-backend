@@ -92,7 +92,9 @@ describe('seed (whole-system demo data, design section 9)', () => {
       'SELECT phone FROM patients',
     );
     const doctorPhoneSet = new Set(doctorPhones.map((row) => row.phone));
-    expect(patientPhones.filter((row) => doctorPhoneSet.has(row.phone))).toEqual([]);
+    expect(
+      patientPhones.filter((row) => doctorPhoneSet.has(row.phone)),
+    ).toEqual([]);
     expect(await countRowsIn('surgery_catalog')).toBe(5);
     expect(await countRowsIn('surgeries')).toBe(6);
     expect(await countRowsIn('surgery_doctors')).toBe(15);
@@ -228,7 +230,14 @@ describe('seed (whole-system demo data, design section 9)', () => {
     await dataSource.query(
       `INSERT INTO users (email, password, name, role, is_active, "profileId")
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      ['leftover.user@example.com', 'hashed', 'Leftover', 'patient', true, profileRows[0].id],
+      [
+        'leftover.user@example.com',
+        'hashed',
+        'Leftover',
+        'patient',
+        true,
+        profileRows[0].id,
+      ],
     );
 
     await seedService.runSeed();

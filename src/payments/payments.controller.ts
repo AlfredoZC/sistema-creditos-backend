@@ -30,10 +30,7 @@ export class PaymentsController {
     description:
       'Payment method disabled, overpayment, or amortization above the outstanding balance',
   })
-  register(
-    @Body() createPaymentDto: CreatePaymentDto,
-    @GetUser() user: User,
-  ) {
+  register(@Body() createPaymentDto: CreatePaymentDto, @GetUser() user: User) {
     return this.paymentsService.register(createPaymentDto, user);
   }
 

@@ -40,5 +40,7 @@ export async function truncateAllTables(dataSource: DataSource): Promise<void> {
   if (quotedTableNames.length === 0) {
     return;
   }
-  await dataSource.query(`TRUNCATE TABLE ${quotedTableNames} RESTART IDENTITY CASCADE`);
+  await dataSource.query(
+    `TRUNCATE TABLE ${quotedTableNames} RESTART IDENTITY CASCADE`,
+  );
 }

@@ -125,7 +125,11 @@ describe('surgery catalog API (design section 5.5)', () => {
       .query(query);
   }
 
-  function updateEntry(token: string, id: string, body: Record<string, unknown>) {
+  function updateEntry(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/surgery-catalog/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -202,7 +206,10 @@ describe('surgery catalog API (design section 5.5)', () => {
     it('rejects a negative base cost with 400 (DTO IsMoney)', async () => {
       const token = await officeToken();
 
-      const response = await createEntry(token, entryBody({ baseCost: '-1.00' }));
+      const response = await createEntry(
+        token,
+        entryBody({ baseCost: '-1.00' }),
+      );
 
       expect(response.status).toBe(400);
     });
@@ -216,10 +223,16 @@ describe('surgery catalog API (design section 5.5)', () => {
       );
       expect(threeDecimals.status).toBe(400);
 
-      const nonNumeric = await createEntry(token, entryBody({ baseCost: 'abc' }));
+      const nonNumeric = await createEntry(
+        token,
+        entryBody({ baseCost: 'abc' }),
+      );
       expect(nonNumeric.status).toBe(400);
 
-      const numericType = await createEntry(token, entryBody({ baseCost: 8000 }));
+      const numericType = await createEntry(
+        token,
+        entryBody({ baseCost: 8000 }),
+      );
       expect(numericType.status).toBe(400);
     });
 

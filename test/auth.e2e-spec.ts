@@ -58,19 +58,34 @@ describe('auth flow (e2e): register -> login -> check-status -> staff role guard
     // A patient cannot create office accounts.
     const patientResponse = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ email: patientEmail, name: 'E2E Guard Patient', password: PASSWORD })
+      .send({
+        email: patientEmail,
+        name: 'E2E Guard Patient',
+        password: PASSWORD,
+      })
       .expect(201);
     await request(app.getHttpServer())
       .post('/api/auth/users')
       .set('Authorization', `Bearer ${patientResponse.body.token}`)
-      .send({ email: officeEmail, name: 'E2E Office', password: PASSWORD, role: UserRole.OFFICE })
+      .send({
+        email: officeEmail,
+        name: 'E2E Office',
+        password: PASSWORD,
+        role: UserRole.OFFICE,
+      })
       .expect(403);
 
     // An admin (seeded directly) can create office accounts.
     await dataSource.query(
       `INSERT INTO users (email, password, name, role, is_active)
        VALUES ($1, $2, $3, $4, $5)`,
-      [adminEmail, bcrypt.hashSync(PASSWORD, 10), 'E2E Admin', UserRole.ADMIN, true],
+      [
+        adminEmail,
+        bcrypt.hashSync(PASSWORD, 10),
+        'E2E Admin',
+        UserRole.ADMIN,
+        true,
+      ],
     );
     const adminLogin = await request(app.getHttpServer())
       .post('/api/auth/login')
@@ -79,7 +94,12 @@ describe('auth flow (e2e): register -> login -> check-status -> staff role guard
     const createdResponse = await request(app.getHttpServer())
       .post('/api/auth/users')
       .set('Authorization', `Bearer ${adminLogin.body.token}`)
-      .send({ email: officeEmail, name: 'E2E Office', password: PASSWORD, role: UserRole.OFFICE })
+      .send({
+        email: officeEmail,
+        name: 'E2E Office',
+        password: PASSWORD,
+        role: UserRole.OFFICE,
+      })
       .expect(201);
     expect(createdResponse.body.role).toBe(UserRole.OFFICE);
 
@@ -91,7 +111,12 @@ describe('auth flow (e2e): register -> login -> check-status -> staff role guard
     await request(app.getHttpServer())
       .post('/api/auth/users')
       .set('Authorization', `Bearer ${officeLogin.body.token}`)
-      .send({ email: anotherOfficeEmail, name: 'E2E Another Office', password: PASSWORD, role: UserRole.OFFICE })
+      .send({
+        email: anotherOfficeEmail,
+        name: 'E2E Another Office',
+        password: PASSWORD,
+        role: UserRole.OFFICE,
+      })
       .expect(403);
   });
 });

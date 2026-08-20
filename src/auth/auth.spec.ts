@@ -99,7 +99,12 @@ describe('auth API (single-role model, design section 9)', () => {
 
   describe('role-based authorization guard (task 4.2)', () => {
     it('rejects staff creation without a token (401)', async () => {
-      const response = await createStaff('', emailFor('no.token'), 'No Token', UserRole.OFFICE);
+      const response = await createStaff(
+        '',
+        emailFor('no.token'),
+        'No Token',
+        UserRole.OFFICE,
+      );
 
       expect(response.status).toBe(401);
     });
@@ -184,33 +189,50 @@ describe('auth API (single-role model, design section 9)', () => {
     });
 
     it('rejects a role field in the public registration payload (400)', async () => {
-      const response = await registerUser(emailFor('role.intruder'), 'Role Intruder', {
-        role: UserRole.ADMIN,
-      });
+      const response = await registerUser(
+        emailFor('role.intruder'),
+        'Role Intruder',
+        {
+          role: UserRole.ADMIN,
+        },
+      );
 
       expect(response.status).toBe(400);
       expect(response.body.message).toEqual(
-        expect.arrayContaining([expect.stringMatching(/role should not exist/i)]),
+        expect.arrayContaining([
+          expect.stringMatching(/role should not exist/i),
+        ]),
       );
     });
 
     it('rejects legacy role values on registration (400)', async () => {
-      const response = await registerUser(emailFor('legacy.register'), 'Legacy Register', {
-        role: 'super-user',
-      });
+      const response = await registerUser(
+        emailFor('legacy.register'),
+        'Legacy Register',
+        {
+          role: 'super-user',
+        },
+      );
 
       expect(response.status).toBe(400);
       expect(response.body.message).toEqual(
-        expect.arrayContaining([expect.stringMatching(/role should not exist/i)]),
+        expect.arrayContaining([
+          expect.stringMatching(/role should not exist/i),
+        ]),
       );
     });
   });
 
   describe('login and session (task 4.3)', () => {
     it('logs in an active user and returns an {id} token without the password', async () => {
-      await insertUserRaw(emailFor('login.user'), 'Login User', UserRole.PATIENT, {
-        passwordHash: bcrypt.hashSync(PASSWORD, 10),
-      });
+      await insertUserRaw(
+        emailFor('login.user'),
+        'Login User',
+        UserRole.PATIENT,
+        {
+          passwordHash: bcrypt.hashSync(PASSWORD, 10),
+        },
+      );
 
       const response = await request(app.getHttpServer())
         .post('/api/auth/login')
@@ -228,10 +250,15 @@ describe('auth API (single-role model, design section 9)', () => {
     });
 
     it('rejects an inactive user on login (401)', async () => {
-      await insertUserRaw(emailFor('inactive.login'), 'Inactive Login', UserRole.PATIENT, {
-        isActive: false,
-        passwordHash: bcrypt.hashSync(PASSWORD, 10),
-      });
+      await insertUserRaw(
+        emailFor('inactive.login'),
+        'Inactive Login',
+        UserRole.PATIENT,
+        {
+          isActive: false,
+          passwordHash: bcrypt.hashSync(PASSWORD, 10),
+        },
+      );
 
       const response = await request(app.getHttpServer())
         .post('/api/auth/login')

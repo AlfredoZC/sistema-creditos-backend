@@ -226,7 +226,10 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
     const catalogResponse = await request(app.getHttpServer())
       .post('/api/surgery-catalog')
       .set('Authorization', `Bearer ${office.token}`)
-      .send({ name: `cat_${RUN_SUFFIX}_${uniqueCounter++}`, baseCost: '8000.00' });
+      .send({
+        name: `cat_${RUN_SUFFIX}_${uniqueCounter++}`,
+        baseCost: '8000.00',
+      });
     expect(catalogResponse.status).toBe(201);
 
     const surgeryResponse = await request(app.getHttpServer())
@@ -349,7 +352,12 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
         },
       ],
     });
-    return buildSignedWebhookPost(app, WEBHOOK_PATH, rawBody, getTestWebhookAppSecret());
+    return buildSignedWebhookPost(
+      app,
+      WEBHOOK_PATH,
+      rawBody,
+      getTestWebhookAppSecret(),
+    );
   }
 
   function inboundMessage(
@@ -378,7 +386,9 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
     return rows[0];
   }
 
-  async function outboundMessages(conversationId: string): Promise<MessageRow[]> {
+  async function outboundMessages(
+    conversationId: string,
+  ): Promise<MessageRow[]> {
     return dataSource.query(
       `SELECT id, body, type, template_id AS "templateId", intent,
               provider_message_id AS "providerMessageId", metadata
@@ -415,10 +425,11 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
 
       // The hybrid patient has NO web account (user_id NULL) — the exact
       // population this bot exists for.
-      const patientRows: Array<{ userId: string | null }> = await dataSource.query(
-        `SELECT user_id AS "userId" FROM patients WHERE id = $1`,
-        [patientId],
-      );
+      const patientRows: Array<{ userId: string | null }> =
+        await dataSource.query(
+          `SELECT user_id AS "userId" FROM patients WHERE id = $1`,
+          [patientId],
+        );
       expect(patientRows[0].userId).toBeNull();
 
       // First message: single phone match -> identified + menu.
@@ -721,9 +732,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
       const conversation = await findConversation(canonical);
       const outboundBefore = await outboundMessages(conversation.id);
       expect(outboundBefore).toHaveLength(1);
-      const sentAuditsBefore = await auditsForRecordIds([
-        outboundBefore[0].id,
-      ]);
+      const sentAuditsBefore = await auditsForRecordIds([outboundBefore[0].id]);
       expect(
         sentAuditsBefore.filter((a) => a.action === 'bot_message.sent'),
       ).toHaveLength(1);
@@ -742,12 +751,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
       let response: request.Response;
       try {
         response = await deliverInbound([
-          inboundMessage(
-            canonical,
-            'wamid.bot.spec.atom.1',
-            'saldo',
-            t0 + 60,
-          ),
+          inboundMessage(canonical, 'wamid.bot.spec.atom.1', 'saldo', t0 + 60),
         ]);
       } finally {
         auditSpy.mockRestore();
@@ -760,9 +764,7 @@ describe('WhatsApp bot — full inbound scenario spec (task 5.5, design §9.4)',
       expect(await inboundCount(conversation.id)).toBe(2);
       const outboundAfter = await outboundMessages(conversation.id);
       expect(outboundAfter).toHaveLength(1);
-      const sentAuditsAfter = await auditsForRecordIds([
-        outboundAfter[0].id,
-      ]);
+      const sentAuditsAfter = await auditsForRecordIds([outboundAfter[0].id]);
       expect(
         sentAuditsAfter.filter((a) => a.action === 'bot_message.sent'),
       ).toHaveLength(1);

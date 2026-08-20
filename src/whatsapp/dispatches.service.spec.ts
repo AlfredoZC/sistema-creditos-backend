@@ -11,7 +11,10 @@ import { ensureTestDbReady } from '../test-utils/setup-test-db';
 import { buildTestingApp } from '../test-utils/test-app';
 import { MockWhatsAppProvider } from './provider/mock-whatsapp-provider';
 import { WhatsAppDispatch } from './entities';
-import { DispatchesService, extractPlaceholderNumbers } from './dispatches.service';
+import {
+  DispatchesService,
+  extractPlaceholderNumbers,
+} from './dispatches.service';
 import { WHATSAPP_PROVIDER } from './whatsapp.module';
 
 jest.setTimeout(60000);
@@ -166,7 +169,6 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
   let dataSource: DataSource;
   let service: DispatchesService;
   let provider: MockWhatsAppProvider;
-  let dispatchRepository: Repository<WhatsAppDispatch>;
 
   beforeAll(async () => {
     await ensureTestDbReady();
@@ -174,7 +176,6 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
     dataSource = app.get(DataSource);
     service = app.get(DispatchesService);
     provider = app.get(WHATSAPP_PROVIDER) as MockWhatsAppProvider;
-    dispatchRepository = app.get(getRepositoryToken(WhatsAppDispatch));
   });
 
   afterAll(async () => {
@@ -194,7 +195,12 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
     const rows: IdRow[] = await dataSource.query(
       `INSERT INTO users (email, password, name, role, is_active)
        VALUES ($1, $2, $3, $4, true) RETURNING id`,
-      [emailFor('dispatch.actor'), 'hashed-password', 'Dispatch Actor', 'office'],
+      [
+        emailFor('dispatch.actor'),
+        'hashed-password',
+        'Dispatch Actor',
+        'office',
+      ],
     );
     return rows[0].id;
   }
@@ -266,7 +272,9 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
     it('happy path: commits queued + audit, then sends and becomes sent with wamid (spec "Happy path dispatch")', async () => {
       const actorId = await insertActor();
       const patient = await insertPatient();
-      const template = await insertTemplate('Hola {{1}}, tu pago de {{2}} vence el {{3}}.');
+      const template = await insertTemplate(
+        'Hola {{1}}, tu pago de {{2}} vence el {{3}}.',
+      );
 
       const dispatch = await service.create(
         {
@@ -323,7 +331,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
       provider.failNext = true;
 
       const dispatch = await service.create(
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'Juan' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'Juan' },
+        },
         actorId,
       );
 
@@ -356,7 +368,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
 
       await expect(
         service.create(
-          { patientId: patient.id, templateId: draftTemplate.id, variables: { '1': 'x' } },
+          {
+            patientId: patient.id,
+            templateId: draftTemplate.id,
+            variables: { '1': 'x' },
+          },
           null,
         ),
       ).rejects.toThrow(ConflictException);
@@ -366,11 +382,17 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
 
     it('rejects a deactivated approved template with 409 (deactivation blocks dispatch)', async () => {
       const patient = await insertPatient();
-      const deactivated = await insertTemplate('Hola {{1}}', { isActive: false });
+      const deactivated = await insertTemplate('Hola {{1}}', {
+        isActive: false,
+      });
 
       await expect(
         service.create(
-          { patientId: patient.id, templateId: deactivated.id, variables: { '1': 'x' } },
+          {
+            patientId: patient.id,
+            templateId: deactivated.id,
+            variables: { '1': 'x' },
+          },
           null,
         ),
       ).rejects.toThrow(ConflictException);
@@ -393,7 +415,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
 
       await expect(
         service.create(
-          { patientId: patient.id, templateId: template.id, variables: { '1': 'Juan' } },
+          {
+            patientId: patient.id,
+            templateId: template.id,
+            variables: { '1': 'Juan' },
+          },
           null,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -457,7 +483,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
       const template = await insertTemplate('Hola {{1}}');
 
       const dispatch = await service.create(
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'Juan' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'Juan' },
+        },
         actorId,
       );
 
@@ -543,9 +573,7 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
 
       const fulfilled = results.filter((r) => r.status === 'fulfilled');
       const rejected = results.filter(
-        (r) =>
-          r.status === 'rejected' &&
-          r.reason instanceof ConflictException,
+        (r) => r.status === 'rejected' && r.reason instanceof ConflictException,
       );
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
@@ -563,7 +591,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
       const template = await insertTemplate('Hola {{1}}');
 
       await service.create(
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'x' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'x' },
+        },
         null,
       );
 
@@ -579,7 +611,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
       const template = await insertTemplate('Hola {{1}}');
       provider.failNext = true;
       const failed = await service.create(
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'Juan' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'Juan' },
+        },
         actorId,
       );
       expect(failed.status).toBe(DispatchStatus.FAILED);
@@ -618,7 +654,11 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
       const patient = await insertPatient();
       const template = await insertTemplate('Hola {{1}}');
       const dispatch = await service.create(
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'x' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'x' },
+        },
         null,
       );
 
@@ -685,14 +725,16 @@ describe('DispatchesService (design §9.2 — create + retry + dedupe, task 3.2)
   describe('pure placeholder extraction', () => {
     it('extracts contiguous placeholder numbers from a template body', () => {
       expect(
-        extractPlaceholderNumbers('Hola {{1}}, tu pago de {{2}} vence el {{3}}.'),
+        extractPlaceholderNumbers(
+          'Hola {{1}}, tu pago de {{2}} vence el {{3}}.',
+        ),
       ).toEqual([1, 2, 3]);
     });
 
     it('returns an empty list for a body without placeholders', () => {
-      expect(extractPlaceholderNumbers('Hola, esto es un recordatorio.')).toEqual(
-        [],
-      );
+      expect(
+        extractPlaceholderNumbers('Hola, esto es un recordatorio.'),
+      ).toEqual([]);
     });
   });
 });

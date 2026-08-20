@@ -21,7 +21,9 @@ export class ReduceInstallmentRecalculationStrategy implements InstallmentRecalc
 
   private readonly financingEngine = new FinancingEngine();
 
-  recalculate(context: InstallmentRecalculationContext): RecalculatedInstallment[] {
+  recalculate(
+    context: InstallmentRecalculationContext,
+  ): RecalculatedInstallment[] {
     if (new Decimal(context.outstandingBalance).isZero()) {
       return context.pendingInstallments.map(cancelInPlace);
     }
@@ -39,7 +41,9 @@ export class ReduceInstallmentRecalculationStrategy implements InstallmentRecalc
     let outstandingBalance = new Decimal(context.outstandingBalance);
     return context.pendingInstallments.map((pendingInstallment, index) => {
       const isLastLine = index === context.pendingInstallments.length - 1;
-      const interestAmount = outstandingBalance.mul(monthlyRate).toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
+      const interestAmount = outstandingBalance
+        .mul(monthlyRate)
+        .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
       const principalAmount = isLastLine
         ? outstandingBalance
         : installmentAmount.minus(interestAmount);
@@ -48,7 +52,9 @@ export class ReduceInstallmentRecalculationStrategy implements InstallmentRecalc
         id: pendingInstallment.id,
         principalAmount: principalAmount.toFixed(MONEY_DECIMALS),
         interestAmount: interestAmount.toFixed(MONEY_DECIMALS),
-        totalAmount: principalAmount.plus(interestAmount).toFixed(MONEY_DECIMALS),
+        totalAmount: principalAmount
+          .plus(interestAmount)
+          .toFixed(MONEY_DECIMALS),
         status: InstallmentStatus.PENDING,
       };
     });
@@ -59,7 +65,9 @@ export class ReduceInstallmentRecalculationStrategy implements InstallmentRecalc
  * Marks a surplus pending line as cancelled in place (rows are never deleted). The
  * original total is preserved so the row keeps a positive amount under the DB CHECKs.
  */
-function cancelInPlace(pendingInstallment: PendingInstallment): RecalculatedInstallment {
+function cancelInPlace(
+  pendingInstallment: PendingInstallment,
+): RecalculatedInstallment {
   return {
     id: pendingInstallment.id,
     principalAmount: pendingInstallment.totalAmount,

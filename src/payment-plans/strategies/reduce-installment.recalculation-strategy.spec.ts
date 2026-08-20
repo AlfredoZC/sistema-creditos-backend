@@ -23,7 +23,10 @@ function buildPendingInstallments(
   }));
 }
 
-function sumAmounts(lines: RecalculatedInstallment[], amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount'): string {
+function sumAmounts(
+  lines: RecalculatedInstallment[],
+  amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount',
+): string {
   return lines
     .reduce((total, line) => total.plus(line[amountKey]), new Decimal('0.00'))
     .toFixed(2);
@@ -69,7 +72,9 @@ describe('ReduceInstallmentRecalculationStrategy (design section 7 — keep term
       interestAmount: '13.80',
       totalAmount: '703.76',
     });
-    expect(recalculated.every((line) => line.status === InstallmentStatus.PENDING)).toBe(true);
+    expect(
+      recalculated.every((line) => line.status === InstallmentStatus.PENDING),
+    ).toBe(true);
   });
 
   it('sums the recomputed principal exactly to the outstanding balance (5,155.19) and totals to 5,629.87', () => {
@@ -95,8 +100,12 @@ describe('ReduceInstallmentRecalculationStrategy (design section 7 — keep term
     const recalculated = strategy.recalculate(context);
 
     expect(recalculated).toHaveLength(8);
-    expect(recalculated.every((line) => line.status === InstallmentStatus.CANCELLED)).toBe(true);
-    expect(recalculated.every((line) => line.totalAmount === '1113.27')).toBe(true);
+    expect(
+      recalculated.every((line) => line.status === InstallmentStatus.CANCELLED),
+    ).toBe(true);
+    expect(recalculated.every((line) => line.totalAmount === '1113.27')).toBe(
+      true,
+    );
   });
 
   it('returns an empty result when there are no pending installments', () => {
@@ -136,7 +145,13 @@ describe('ReduceInstallmentRecalculationStrategy (design section 7 — keep term
 
     const recalculated = strategy.recalculate(context);
 
-    expect(recalculated.map((line) => [line.principalAmount, line.interestAmount, line.totalAmount])).toEqual([
+    expect(
+      recalculated.map((line) => [
+        line.principalAmount,
+        line.interestAmount,
+        line.totalAmount,
+      ]),
+    ).toEqual([
       ['333.33', '0.00', '333.33'],
       ['333.33', '0.00', '333.33'],
       ['333.34', '0.00', '333.34'],

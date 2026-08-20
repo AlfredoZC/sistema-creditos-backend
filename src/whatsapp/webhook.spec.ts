@@ -85,43 +85,90 @@ interface AuditRow {
 
 describe('Webhook pure transition helpers (design §9.3)', () => {
   it('accepts ONLY the effective edges sent→delivered, sent→failed, delivered→read', () => {
-    expect(isEffectiveDispatchTransition(DispatchStatus.SENT, DispatchStatus.DELIVERED)).toBe(true);
-    expect(isEffectiveDispatchTransition(DispatchStatus.SENT, DispatchStatus.FAILED)).toBe(true);
-    expect(isEffectiveDispatchTransition(DispatchStatus.DELIVERED, DispatchStatus.READ)).toBe(true);
+    expect(
+      isEffectiveDispatchTransition(
+        DispatchStatus.SENT,
+        DispatchStatus.DELIVERED,
+      ),
+    ).toBe(true);
+    expect(
+      isEffectiveDispatchTransition(DispatchStatus.SENT, DispatchStatus.FAILED),
+    ).toBe(true);
+    expect(
+      isEffectiveDispatchTransition(
+        DispatchStatus.DELIVERED,
+        DispatchStatus.READ,
+      ),
+    ).toBe(true);
   });
 
   it('rejects duplicates, regressions, and out-of-machine edges', () => {
     // Duplicate delivery (spec "Duplicate delivery ignored").
-    expect(isEffectiveDispatchTransition(DispatchStatus.DELIVERED, DispatchStatus.DELIVERED)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(
+        DispatchStatus.DELIVERED,
+        DispatchStatus.DELIVERED,
+      ),
+    ).toBe(false);
     // Late 'sent' after 'delivered' must not regress (spec "Out-of-order
     // status does not regress").
-    expect(isEffectiveDispatchTransition(DispatchStatus.DELIVERED, DispatchStatus.SENT)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(
+        DispatchStatus.DELIVERED,
+        DispatchStatus.SENT,
+      ),
+    ).toBe(false);
     // A read message can never go back to delivered.
-    expect(isEffectiveDispatchTransition(DispatchStatus.READ, DispatchStatus.DELIVERED)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(
+        DispatchStatus.READ,
+        DispatchStatus.DELIVERED,
+      ),
+    ).toBe(false);
     // failed→sent belongs to the manual retry flow, never the webhook.
-    expect(isEffectiveDispatchTransition(DispatchStatus.FAILED, DispatchStatus.SENT)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(DispatchStatus.FAILED, DispatchStatus.SENT),
+    ).toBe(false);
     // queued→sent is the service's own send path, never a webhook edge.
-    expect(isEffectiveDispatchTransition(DispatchStatus.QUEUED, DispatchStatus.SENT)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(DispatchStatus.QUEUED, DispatchStatus.SENT),
+    ).toBe(false);
     // sent→read skips delivered — not an allowed edge.
-    expect(isEffectiveDispatchTransition(DispatchStatus.SENT, DispatchStatus.READ)).toBe(false);
+    expect(
+      isEffectiveDispatchTransition(DispatchStatus.SENT, DispatchStatus.READ),
+    ).toBe(false);
   });
 
   it('maps Meta provider status strings to dispatch statuses; unknown → null', () => {
     expect(mapProviderStatusToDispatchStatus('sent')).toBe(DispatchStatus.SENT);
-    expect(mapProviderStatusToDispatchStatus('delivered')).toBe(DispatchStatus.DELIVERED);
+    expect(mapProviderStatusToDispatchStatus('delivered')).toBe(
+      DispatchStatus.DELIVERED,
+    );
     expect(mapProviderStatusToDispatchStatus('read')).toBe(DispatchStatus.READ);
-    expect(mapProviderStatusToDispatchStatus('failed')).toBe(DispatchStatus.FAILED);
+    expect(mapProviderStatusToDispatchStatus('failed')).toBe(
+      DispatchStatus.FAILED,
+    );
     expect(mapProviderStatusToDispatchStatus('deleted')).toBeNull();
     expect(mapProviderStatusToDispatchStatus('')).toBeNull();
   });
 
   it('maps Meta template events to template statuses; unknown → null', () => {
-    expect(mapProviderStatusToTemplateStatus('IN_APPROVAL')).toBe(TemplateStatus.SUBMITTED);
-    expect(mapProviderStatusToTemplateStatus('APPROVED')).toBe(TemplateStatus.APPROVED);
-    expect(mapProviderStatusToTemplateStatus('REJECTED')).toBe(TemplateStatus.REJECTED);
-    expect(mapProviderStatusToTemplateStatus('PAUSED')).toBe(TemplateStatus.PAUSED);
+    expect(mapProviderStatusToTemplateStatus('IN_APPROVAL')).toBe(
+      TemplateStatus.SUBMITTED,
+    );
+    expect(mapProviderStatusToTemplateStatus('APPROVED')).toBe(
+      TemplateStatus.APPROVED,
+    );
+    expect(mapProviderStatusToTemplateStatus('REJECTED')).toBe(
+      TemplateStatus.REJECTED,
+    );
+    expect(mapProviderStatusToTemplateStatus('PAUSED')).toBe(
+      TemplateStatus.PAUSED,
+    );
     // Case-insensitive: Meta may send either casing.
-    expect(mapProviderStatusToTemplateStatus('approved')).toBe(TemplateStatus.APPROVED);
+    expect(mapProviderStatusToTemplateStatus('approved')).toBe(
+      TemplateStatus.APPROVED,
+    );
     // Events that do not map (IN_APPEAL, PENDING_DELETION, DISABLED, …) are
     // no-ops — never thrown.
     expect(mapProviderStatusToTemplateStatus('IN_APPEAL')).toBeNull();
@@ -278,7 +325,9 @@ describe('Webhook POST signature gate (AD3 — verify-then-parse)', () => {
               field: 'messages',
               value: {
                 messaging_product: 'whatsapp',
-                statuses: [{ id: wamid, status: 'delivered', timestamp: '1700000000' }],
+                statuses: [
+                  { id: wamid, status: 'delivered', timestamp: '1700000000' },
+                ],
               },
             },
           ],
@@ -426,7 +475,10 @@ describe('Webhook POST statuses[] (spec "Webhook Status and Inbound Processing")
   }
 
   it('applies an effective sent→delivered transition with one system audit', async () => {
-    const dispatchId = await insertDispatch('wamid.webhook.1', DispatchStatus.SENT);
+    const dispatchId = await insertDispatch(
+      'wamid.webhook.1',
+      DispatchStatus.SENT,
+    );
 
     const response = await signedStatusPost([
       { id: 'wamid.webhook.1', status: 'delivered' },
@@ -485,7 +537,10 @@ describe('Webhook POST statuses[] (spec "Webhook Status and Inbound Processing")
   });
 
   it('applies an effective sent→failed transition (retryable terminal side)', async () => {
-    const dispatchId = await insertDispatch('wamid.webhook.4', DispatchStatus.SENT);
+    const dispatchId = await insertDispatch(
+      'wamid.webhook.4',
+      DispatchStatus.SENT,
+    );
 
     const response = await signedStatusPost([
       { id: 'wamid.webhook.4', status: 'failed' },
@@ -532,7 +587,10 @@ describe('Webhook POST statuses[] (spec "Webhook Status and Inbound Processing")
   });
 
   it('accepts the flat payload shape (statuses at root, design §9.3)', async () => {
-    const dispatchId = await insertDispatch('wamid.webhook.6', DispatchStatus.SENT);
+    const dispatchId = await insertDispatch(
+      'wamid.webhook.6',
+      DispatchStatus.SENT,
+    );
     const rawBody = JSON.stringify({
       statuses: [{ id: 'wamid.webhook.6', status: 'delivered' }],
     });
@@ -587,7 +645,9 @@ describe('Webhook POST messages[] (inbound bot wiring — task 5.4)', () => {
     providerMessageId: string;
   }
 
-  async function findConversation(waId: string): Promise<ConversationRow | undefined> {
+  async function findConversation(
+    waId: string,
+  ): Promise<ConversationRow | undefined> {
     const rows: ConversationRow[] = await dataSource.query(
       `SELECT id, wa_id AS "waId", state
          FROM bot_conversations
@@ -693,8 +753,12 @@ describe('Webhook POST messages[] (inbound bot wiring — task 5.4)', () => {
     const conversation = await findConversation(canonical);
     expect(conversation?.state).toBe('identified');
     const messages = await messagesFor(conversation!.id);
-    expect(messages.filter((row) => row.direction === 'inbound')).toHaveLength(1);
-    expect(messages.filter((row) => row.direction === 'outbound')).toHaveLength(1);
+    expect(messages.filter((row) => row.direction === 'inbound')).toHaveLength(
+      1,
+    );
+    expect(messages.filter((row) => row.direction === 'outbound')).toHaveLength(
+      1,
+    );
     expect(provider.sent).toHaveLength(1);
   });
 
@@ -778,10 +842,13 @@ describe('Webhook POST message_template_status_update[] (mirrorProviderStatus, 4
     );
   }
 
-  async function storedTemplate(id: string): Promise<{
-    status: string;
-    providerStatus: string | null;
-  } | undefined> {
+  async function storedTemplate(id: string): Promise<
+    | {
+        status: string;
+        providerStatus: string | null;
+      }
+    | undefined
+  > {
     const rows: Array<{ status: string; providerStatus: string | null }> =
       await dataSource.query(
         `SELECT status,
@@ -825,7 +892,9 @@ describe('Webhook POST message_template_status_update[] (mirrorProviderStatus, 4
     const audits = await statusChangedAudits(templateId);
     expect(audits).toHaveLength(1);
     expect(audits[0].userId).toBeNull(); // system event, AD9
-    expect(audits[0].previousData).toEqual({ status: TemplateStatus.SUBMITTED });
+    expect(audits[0].previousData).toEqual({
+      status: TemplateStatus.SUBMITTED,
+    });
     expect(audits[0].newData).toEqual({
       status: TemplateStatus.APPROVED,
       providerStatus: 'APPROVED',

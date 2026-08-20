@@ -3,10 +3,7 @@ import { Test } from '@nestjs/testing';
 import { Request } from 'express';
 import * as request from 'supertest';
 import { ensureTestDbReady } from './setup-test-db';
-import {
-  buildTestingApp,
-  createTestingNestApplication,
-} from './test-app';
+import { buildTestingApp, createTestingNestApplication } from './test-app';
 
 jest.setTimeout(60000);
 
@@ -34,7 +31,9 @@ describe('buildTestingApp (harness contract, design section 12)', () => {
   });
 
   it('serves routes behind the global api prefix with the auth guard active', async () => {
-    const response = await request(app.getHttpServer()).get('/api/auth/check-status');
+    const response = await request(app.getHttpServer()).get(
+      '/api/auth/check-status',
+    );
     expect(response.status).toBe(401);
   });
 

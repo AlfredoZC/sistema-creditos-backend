@@ -33,7 +33,11 @@ export class BotMessage {
   body: string;
 
   @ApiProperty({ nullable: true })
-  @Column('varchar', { length: 255, name: 'provider_message_id', nullable: true })
+  @Column('varchar', {
+    length: 255,
+    name: 'provider_message_id',
+    nullable: true,
+  })
   providerMessageId: string | null;
 
   @ApiProperty({ default: 'text' })

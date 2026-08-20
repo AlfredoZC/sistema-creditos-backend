@@ -121,7 +121,9 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
     return { id, token: await tokenForUserId(id) };
   }
 
-  async function createPatientRaw(userId: string | null = null): Promise<string> {
+  async function createPatientRaw(
+    userId: string | null = null,
+  ): Promise<string> {
     const rows: IdRow[] = await dataSource.query(
       `INSERT INTO patients (user_id, identity_document, first_name, paternal_last_name, phone)
        VALUES ($1, $2, $3, $4, $5)
@@ -217,7 +219,10 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
     const created = await request(app.getHttpServer())
       .post('/api/payment-methods')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: `Disabled-${RUN_SUFFIX}-${uniqueCounter++}`, isEnabled: true });
+      .send({
+        name: `Disabled-${RUN_SUFFIX}-${uniqueCounter++}`,
+        isEnabled: true,
+      });
     expect(created.status).toBe(201);
     const disabled = await request(app.getHttpServer())
       .patch(`/api/payment-methods/${created.body.id as string}`)
@@ -237,7 +242,10 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
     );
   }
 
-  async function installmentIdFor(planId: string, number: number): Promise<string> {
+  async function installmentIdFor(
+    planId: string,
+    number: number,
+  ): Promise<string> {
     const rows = await installmentRows(planId);
     const match = rows.find((row) => row.installment_number === number);
     if (!match) throw new Error(`installment ${number} not found`);
@@ -401,7 +409,11 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
           type: PaymentType.INSTALLMENT_PAYMENT,
           amount: '1113.27',
           outstandingBalance: '9086.73',
-          installment: { id: installment1, status: InstallmentStatus.PAID, paidAmount: '1113.27' },
+          installment: {
+            id: installment1,
+            status: InstallmentStatus.PAID,
+            paidAmount: '1113.27',
+          },
         },
       });
       // The vocabulary has no 'payment.created' action: auto-confirm is
@@ -426,7 +438,10 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
       // T4: the office confirms the receipt; the audit row appears with the
       // office actor, the status transition and the applied effects
       // (creditPrincipal(500) = 418.38 over installment 2's principal 931.54).
-      const confirmResponse = await confirmPayment(office.token, pendingPaymentId);
+      const confirmResponse = await confirmPayment(
+        office.token,
+        pendingPaymentId,
+      );
       expect(confirmResponse.status).toBe(200);
       expect(confirmResponse.body.status).toBe(PaymentStatus.CONFIRMED);
 
@@ -441,7 +456,11 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
         new_data: {
           status: PaymentStatus.CONFIRMED,
           outstandingBalance: '8668.35',
-          installment: { id: installment2, status: InstallmentStatus.PARTIAL, paidAmount: '500.00' },
+          installment: {
+            id: installment2,
+            status: InstallmentStatus.PARTIAL,
+            paidAmount: '500.00',
+          },
         },
       });
 
@@ -459,7 +478,10 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
       expect(rejectUpload.status).toBe(201);
       const rejectedPaymentId = rejectUpload.body.id as string;
 
-      const rejectResponse = await rejectPayment(office.token, rejectedPaymentId);
+      const rejectResponse = await rejectPayment(
+        office.token,
+        rejectedPaymentId,
+      );
       expect(rejectResponse.status).toBe(200);
       expect(rejectResponse.body.status).toBe(PaymentStatus.REJECTED);
       expect((await planRows(planId))[0].outstanding_balance).toBe('8668.35');
@@ -490,7 +512,12 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
       // balance 5,155.19 -> A = 703.73, lines 1-7 at 703.73, line 8 = 703.76
       // (design 7, Option A). The original schedule lines total 840.24 with a
       // 840.27 last line (remainder absorption, design 6.2).
-      const { planId } = await createPlan(office.token, patientId, '6155.19', 8);
+      const { planId } = await createPlan(
+        office.token,
+        patientId,
+        '6155.19',
+        8,
+      );
 
       const upload = await registerPayment(patient.token, {
         paymentPlanId: planId,
@@ -572,7 +599,12 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
       const office = await officeUser();
       const patient = await patientUser();
       const patientId = await createPatientRaw(patient.id);
-      const { planId } = await createPlan(office.token, patientId, '10000.00', 10);
+      const { planId } = await createPlan(
+        office.token,
+        patientId,
+        '10000.00',
+        10,
+      );
       const installment1 = await installmentIdFor(planId, 1);
 
       const upload = await registerPayment(patient.token, {
@@ -675,7 +707,9 @@ describe('audit wiring end-to-end (design 5.12, audit-logging spec)', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].user_id).toBeNull();
       expect(rows[0].table_name).toBe('surgeries');
-      expect(rows[0].previous_data).toEqual({ status: SurgeryStatus.SCHEDULED });
+      expect(rows[0].previous_data).toEqual({
+        status: SurgeryStatus.SCHEDULED,
+      });
       expect(rows[0].new_data).toEqual({ status: SurgeryStatus.PERFORMED });
     });
   });

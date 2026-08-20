@@ -131,7 +131,9 @@ describe('auth single-role migration (design sections 9 and 10)', () => {
         WHERE table_schema = 'public' AND table_name = 'users'
         ORDER BY ordinal_position`,
     );
-    const byName = new Map(columns.map((column) => [column.column_name, column]));
+    const byName = new Map(
+      columns.map((column) => [column.column_name, column]),
+    );
 
     expect(byName.get('id')!.column_default).toContain('gen_random_uuid()');
     expect(byName.get('email')!.character_maximum_length).toBe(255);

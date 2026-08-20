@@ -16,6 +16,8 @@ describe('AppController (e2e)', () => {
   });
 
   it('GET /api/auth/check-status without token is rejected (401)', () => {
-    return request(app.getHttpServer()).get('/api/auth/check-status').expect(401);
+    return request(app.getHttpServer())
+      .get('/api/auth/check-status')
+      .expect(401);
   });
 });

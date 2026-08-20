@@ -112,7 +112,13 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     await dataSource.query(
       `INSERT INTO users (email, password, name, role, is_active)
        VALUES ($1, $2, $3, $4, $5)`,
-      [adminEmail, bcrypt.hashSync(PASSWORD, 10), 'E2E Confirm Admin', UserRole.ADMIN, true],
+      [
+        adminEmail,
+        bcrypt.hashSync(PASSWORD, 10),
+        'E2E Confirm Admin',
+        UserRole.ADMIN,
+        true,
+      ],
     );
     adminToken = await login(adminEmail);
 
@@ -121,7 +127,12 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     const officeCreated = await request(app.getHttpServer())
       .post('/api/auth/users')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ email: officeEmail, name: 'E2E Confirm Office', password: PASSWORD, role: UserRole.OFFICE })
+      .send({
+        email: officeEmail,
+        name: 'E2E Confirm Office',
+        password: PASSWORD,
+        role: UserRole.OFFICE,
+      })
       .expect(201);
     expect(officeCreated.body.role).toBe(UserRole.OFFICE);
     officeUserId = officeCreated.body.id as string;
@@ -166,7 +177,11 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     const patientEmail = `e2e.confirm.patient.${RUN_SUFFIX}@example.com`;
     const patientRegistered = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ email: patientEmail, name: 'E2E Confirm Patient', password: PASSWORD })
+      .send({
+        email: patientEmail,
+        name: 'E2E Confirm Patient',
+        password: PASSWORD,
+      })
       .expect(201);
     expect(patientRegistered.body.role).toBe(UserRole.PATIENT);
     patientUserId = patientRegistered.body.id as string;
@@ -181,7 +196,10 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     const catalogCreated = await request(app.getHttpServer())
       .post('/api/surgery-catalog')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: `E2E Confirm Appendectomy-${RUN_SUFFIX}`, baseCost: FINANCED_AMOUNT })
+      .send({
+        name: `E2E Confirm Appendectomy-${RUN_SUFFIX}`,
+        baseCost: FINANCED_AMOUNT,
+      })
       .expect(201);
     const surgeryCreated = await request(app.getHttpServer())
       .post('/api/surgeries')
@@ -337,7 +355,9 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     expect(response.body.status).toBe(PaymentStatus.CONFIRMED);
     expect(response.body.type).toBe(PaymentType.PRINCIPAL_AMORTIZATION);
     expect(response.body.amount).toBe(AMORTIZATION_AMOUNT);
-    expect(response.body.amortizationMode).toBe(AmortizationMode.REDUCE_INSTALLMENT);
+    expect(response.body.amortizationMode).toBe(
+      AmortizationMode.REDUCE_INSTALLMENT,
+    );
     expect(response.body.patientUserId).toBeNull();
     expect(response.body.recordedByUserId).toBe(officeUserId);
     const paymentId = response.body.id as string;
@@ -376,22 +396,41 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     expect(confirmAudits).toHaveLength(1);
     expect(confirmAudits[0].user_id).toBe(officeUserId);
     expect(confirmAudits[0].table_name).toBe('payments');
-    expect(confirmAudits[0].previous_data?.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+    expect(confirmAudits[0].previous_data?.status).toBe(
+      PaymentStatus.PENDING_CONFIRMATION,
+    );
     expect(confirmAudits[0].new_data?.status).toBe(PaymentStatus.CONFIRMED);
-    expect(confirmAudits[0].new_data?.outstandingBalance).toBe(RECALCULATED_BALANCE);
-    expect(confirmAudits[0].new_data?.type).toBe(PaymentType.PRINCIPAL_AMORTIZATION);
-    expect(confirmAudits[0].new_data?.amortizationMode).toBe(AmortizationMode.REDUCE_INSTALLMENT);
+    expect(confirmAudits[0].new_data?.outstandingBalance).toBe(
+      RECALCULATED_BALANCE,
+    );
+    expect(confirmAudits[0].new_data?.type).toBe(
+      PaymentType.PRINCIPAL_AMORTIZATION,
+    );
+    expect(confirmAudits[0].new_data?.amortizationMode).toBe(
+      AmortizationMode.REDUCE_INSTALLMENT,
+    );
 
-    const recalcAudits = await auditRowsFor(planId, 'payment_plan.recalculated');
+    const recalcAudits = await auditRowsFor(
+      planId,
+      'payment_plan.recalculated',
+    );
     expect(recalcAudits).toHaveLength(1);
     expect(recalcAudits[0].user_id).toBe(officeUserId);
     expect(recalcAudits[0].table_name).toBe('payment_plans');
-    expect(recalcAudits[0].previous_data?.outstandingBalance).toBe(FINANCED_AMOUNT);
-    expect(recalcAudits[0].new_data?.outstandingBalance).toBe(RECALCULATED_BALANCE);
+    expect(recalcAudits[0].previous_data?.outstandingBalance).toBe(
+      FINANCED_AMOUNT,
+    );
+    expect(recalcAudits[0].new_data?.outstandingBalance).toBe(
+      RECALCULATED_BALANCE,
+    );
     expect(recalcAudits[0].previous_data?.installments).toHaveLength(8);
     expect(recalcAudits[0].new_data?.installments).toHaveLength(8);
-    expect(recalcAudits[0].new_data?.installments?.[0].totalAmount).toBe(REDUCED_INSTALLMENT);
-    expect(recalcAudits[0].new_data?.installments?.[7].totalAmount).toBe(FINAL_INSTALLMENT);
+    expect(recalcAudits[0].new_data?.installments?.[0].totalAmount).toBe(
+      REDUCED_INSTALLMENT,
+    );
+    expect(recalcAudits[0].new_data?.installments?.[7].totalAmount).toBe(
+      FINAL_INSTALLMENT,
+    );
   });
 
   it('keeps the patient receipt upload pending with no balance, schedule or audit effect', async () => {
@@ -431,8 +470,12 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     expect(patientRead.body.outstandingBalance).toBe(RECALCULATED_BALANCE);
 
     // T3 registers without audit: no confirmation entry for this payment.
-    expect(await auditRowsFor(pendingPaymentId, 'payment.confirmed')).toHaveLength(0);
-    expect(await auditRowsFor(pendingPaymentId, 'payment.rejected')).toHaveLength(0);
+    expect(
+      await auditRowsFor(pendingPaymentId, 'payment.confirmed'),
+    ).toHaveLength(0);
+    expect(
+      await auditRowsFor(pendingPaymentId, 'payment.rejected'),
+    ).toHaveLength(0);
   });
 
   it('rejects the office overpayment with 409 and persists nothing (D1)', async () => {
@@ -513,12 +556,19 @@ describe('payment confirmation flow (e2e): full journey on db_creditos_test', ()
     });
 
     // Exactly one audit entry, actor-attributed, with the status transition.
-    const rejectAudits = await auditRowsFor(pendingPaymentId, 'payment.rejected');
+    const rejectAudits = await auditRowsFor(
+      pendingPaymentId,
+      'payment.rejected',
+    );
     expect(rejectAudits).toHaveLength(1);
     expect(rejectAudits[0].user_id).toBe(officeUserId);
     expect(rejectAudits[0].table_name).toBe('payments');
-    expect(rejectAudits[0].previous_data?.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+    expect(rejectAudits[0].previous_data?.status).toBe(
+      PaymentStatus.PENDING_CONFIRMATION,
+    );
     expect(rejectAudits[0].new_data?.status).toBe(PaymentStatus.REJECTED);
-    expect(await auditRowsFor(pendingPaymentId, 'payment.confirmed')).toHaveLength(0);
+    expect(
+      await auditRowsFor(pendingPaymentId, 'payment.confirmed'),
+    ).toHaveLength(0);
   });
 });

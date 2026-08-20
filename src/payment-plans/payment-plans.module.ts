@@ -13,7 +13,11 @@ import { RecalculationStrategyFactory } from './strategies';
 
 @Module({
   controllers: [PaymentPlansController],
-  providers: [PaymentPlansService, FinancingEngine, RecalculationStrategyFactory],
+  providers: [
+    PaymentPlansService,
+    FinancingEngine,
+    RecalculationStrategyFactory,
+  ],
   imports: [
     // AD4: the down-payment row is inserted through the Payment entity inside
     // the plan-creation transaction; the payments MODULE (PR13) stays out of

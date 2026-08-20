@@ -8,7 +8,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Decimal from 'decimal.js';
-import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../auth/entities/user.entity';
 import {
@@ -105,7 +111,8 @@ export class PaymentPlansService {
           );
         }
 
-        const downPayment = createPaymentPlanDto.downPayment ?? DEFAULT_DOWN_PAYMENT;
+        const downPayment =
+          createPaymentPlanDto.downPayment ?? DEFAULT_DOWN_PAYMENT;
         const financedAmount = this.computeFinancedAmount(
           surgery.totalCost,
           downPayment,
@@ -133,12 +140,13 @@ export class PaymentPlansService {
         const startDate = createPaymentPlanDto.startDate
           ? toUtcDateString(parseUtcDate(createPaymentPlanDto.startDate))
           : todayUtcDateString();
-        const schedule = this.financingEngine.generateFrenchAmortizationSchedule(
-          financedAmount,
-          monthlyInterestRate,
-          installmentCount,
-          parseUtcDate(startDate),
-        );
+        const schedule =
+          this.financingEngine.generateFrenchAmortizationSchedule(
+            financedAmount,
+            monthlyInterestRate,
+            installmentCount,
+            parseUtcDate(startDate),
+          );
 
         const plan = manager.create(PaymentPlan, {
           surgeryId: surgery.id,
@@ -227,7 +235,12 @@ export class PaymentPlansService {
   async findAll(
     query: PaymentPlanQueryDto,
     currentUser: User,
-  ): Promise<{ data: PaymentPlan[]; total: number; limit: number; offset: number }> {
+  ): Promise<{
+    data: PaymentPlan[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const { limit = 10, offset = 0 } = query;
     if (this.isStaff(currentUser)) {
       const where: FindOptionsWhere<PaymentPlan> = {};
@@ -439,7 +452,8 @@ export class PaymentPlansService {
 
   private isStaff(currentUser: User): boolean {
     return (
-      currentUser.role === UserRole.OFFICE || currentUser.role === UserRole.ADMIN
+      currentUser.role === UserRole.OFFICE ||
+      currentUser.role === UserRole.ADMIN
     );
   }
 }
@@ -492,7 +506,6 @@ function isOverdue(
 /** True for the unpaid statuses that still carry debt (pending, partial). */
 function isUnpaid(status: InstallmentStatus): boolean {
   return (
-    status === InstallmentStatus.PENDING ||
-    status === InstallmentStatus.PARTIAL
+    status === InstallmentStatus.PENDING || status === InstallmentStatus.PARTIAL
   );
 }

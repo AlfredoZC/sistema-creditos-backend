@@ -1,13 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
-import { dropTestDatabaseForFreshRun, ensureTestDbReady } from './setup-test-db';
+import {
+  dropTestDatabaseForFreshRun,
+  ensureTestDbReady,
+} from './setup-test-db';
 
 jest.setTimeout(60000);
 
 const MAINTENANCE_DATABASE = 'postgres';
 const TEST_DATABASE_NAME = 'db_creditos_test';
-const MIGRATIONS_DIRECTORY = path.resolve(process.cwd(), 'src', 'database', 'migrations');
+const MIGRATIONS_DIRECTORY = path.resolve(
+  process.cwd(),
+  'src',
+  'database',
+  'migrations',
+);
 
 function getMaintenancePool(): Pool {
   return new Pool({
@@ -41,7 +49,9 @@ async function getAppliedMigrationCount(): Promise<number> {
     password: process.env.DB_PASSWORD,
   });
   try {
-    const result = await testPool.query('SELECT count(*)::int AS count FROM migrations');
+    const result = await testPool.query(
+      'SELECT count(*)::int AS count FROM migrations',
+    );
     return result.rows[0].count as number;
   } finally {
     await testPool.end();

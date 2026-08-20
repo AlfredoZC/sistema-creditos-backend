@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DataSource, Repository } from 'typeorm';
 import { Profile } from './entities/profile.entity';
@@ -41,9 +40,8 @@ export class ProfileService {
         return profile;
       }
 
-      const { secureUrl, publicId } = await this.cloudinaryService.uploadFile(
-        file,
-      );
+      const { secureUrl, publicId } =
+        await this.cloudinaryService.uploadFile(file);
 
       if (secureUrl) {
         await this.dataSource

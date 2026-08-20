@@ -27,7 +27,10 @@ export class BotConversation {
   @Column('uuid', { name: 'patient_id', nullable: true })
   patientId: string | null;
 
-  @ApiProperty({ enum: BotConversationState, default: BotConversationState.UNIDENTIFIED })
+  @ApiProperty({
+    enum: BotConversationState,
+    default: BotConversationState.UNIDENTIFIED,
+  })
   @Column({
     type: 'enum',
     enum: BotConversationState,

@@ -3,7 +3,7 @@ import {
   MetaCloudApiConfig,
   MetaCloudApiProvider,
 } from './meta-cloud-api.provider';
-import { ProviderSendError, ProviderTemplateError } from './provider-errors';
+import { ProviderTemplateError } from './provider-errors';
 import {
   SendTemplateMessageInput,
   SubmitTemplateInput,

@@ -218,16 +218,56 @@ export interface SeedData {
 // ---- Fixed v4-format UUID constants (explicit ids override the DB defaults) --
 
 const USERS = [
-  { id: '10000000-0000-4000-8000-000000000001', name: 'Admin', role: UserRole.ADMIN },
-  { id: '10000000-0000-4000-8000-000000000002', name: 'Ana', role: UserRole.OFFICE },
-  { id: '10000000-0000-4000-8000-000000000003', name: 'Carlos', role: UserRole.OFFICE },
-  { id: '10000000-0000-4000-8000-000000000004', name: 'Daniel', role: UserRole.OFFICE },
-  { id: '10000000-0000-4000-8000-000000000005', name: 'Elena', role: UserRole.DOCTOR },
-  { id: '10000000-0000-4000-8000-000000000006', name: 'Fernando', role: UserRole.DOCTOR },
-  { id: '10000000-0000-4000-8000-000000000007', name: 'Gloria', role: UserRole.DOCTOR },
-  { id: '10000000-0000-4000-8000-000000000008', name: 'Hector', role: UserRole.PATIENT },
-  { id: '10000000-0000-4000-8000-000000000009', name: 'Isabel', role: UserRole.PATIENT },
-  { id: '10000000-0000-4000-8000-000000000010', name: 'Jorge', role: UserRole.PATIENT },
+  {
+    id: '10000000-0000-4000-8000-000000000001',
+    name: 'Admin',
+    role: UserRole.ADMIN,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000002',
+    name: 'Ana',
+    role: UserRole.OFFICE,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000003',
+    name: 'Carlos',
+    role: UserRole.OFFICE,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000004',
+    name: 'Daniel',
+    role: UserRole.OFFICE,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000005',
+    name: 'Elena',
+    role: UserRole.DOCTOR,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000006',
+    name: 'Fernando',
+    role: UserRole.DOCTOR,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000007',
+    name: 'Gloria',
+    role: UserRole.DOCTOR,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000008',
+    name: 'Hector',
+    role: UserRole.PATIENT,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000009',
+    name: 'Isabel',
+    role: UserRole.PATIENT,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000010',
+    name: 'Jorge',
+    role: UserRole.PATIENT,
+  },
 ];
 
 const ADMIN_USER_ID = USERS[0].id;
@@ -520,7 +560,8 @@ const SURGERY_CATALOG: SeedSurgeryCatalog[] = [
   {
     id: CATALOG_1_ID,
     name: 'Cateterismo cardiaco',
-    description: 'Procedimiento de cateterismo cardiaco diagnostico y terapeutico.',
+    description:
+      'Procedimiento de cateterismo cardiaco diagnostico y terapeutico.',
     baseCost: '45000.00',
   },
   {
@@ -607,21 +648,96 @@ const SURGERIES: SeedSurgery[] = [
 ];
 
 const SURGERY_DOCTORS: SeedSurgeryDoctor[] = [
-  { id: SURGERY_DOCTOR_IDS[0], surgeryId: SURGERY_1_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[1], surgeryId: SURGERY_1_ID, doctorId: DOCTOR_2_ID, role: SurgeryDoctorRole.ASSISTANT },
-  { id: SURGERY_DOCTOR_IDS[2], surgeryId: SURGERY_1_ID, doctorId: DOCTOR_3_ID, role: SurgeryDoctorRole.ANESTHESIOLOGIST },
-  { id: SURGERY_DOCTOR_IDS[3], surgeryId: SURGERY_2_ID, doctorId: DOCTOR_2_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[4], surgeryId: SURGERY_2_ID, doctorId: DOCTOR_3_ID, role: SurgeryDoctorRole.ASSISTANT },
-  { id: SURGERY_DOCTOR_IDS[5], surgeryId: SURGERY_2_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.ANESTHESIOLOGIST },
-  { id: SURGERY_DOCTOR_IDS[6], surgeryId: SURGERY_3_ID, doctorId: DOCTOR_3_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[7], surgeryId: SURGERY_3_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.ASSISTANT },
-  { id: SURGERY_DOCTOR_IDS[8], surgeryId: SURGERY_4_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[9], surgeryId: SURGERY_4_ID, doctorId: DOCTOR_3_ID, role: SurgeryDoctorRole.ANESTHESIOLOGIST },
-  { id: SURGERY_DOCTOR_IDS[10], surgeryId: SURGERY_5_ID, doctorId: DOCTOR_2_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[11], surgeryId: SURGERY_5_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.ASSISTANT },
-  { id: SURGERY_DOCTOR_IDS[12], surgeryId: SURGERY_6_ID, doctorId: DOCTOR_3_ID, role: SurgeryDoctorRole.PRINCIPAL },
-  { id: SURGERY_DOCTOR_IDS[13], surgeryId: SURGERY_6_ID, doctorId: DOCTOR_2_ID, role: SurgeryDoctorRole.ASSISTANT },
-  { id: SURGERY_DOCTOR_IDS[14], surgeryId: SURGERY_6_ID, doctorId: DOCTOR_1_ID, role: SurgeryDoctorRole.ANESTHESIOLOGIST },
+  {
+    id: SURGERY_DOCTOR_IDS[0],
+    surgeryId: SURGERY_1_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[1],
+    surgeryId: SURGERY_1_ID,
+    doctorId: DOCTOR_2_ID,
+    role: SurgeryDoctorRole.ASSISTANT,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[2],
+    surgeryId: SURGERY_1_ID,
+    doctorId: DOCTOR_3_ID,
+    role: SurgeryDoctorRole.ANESTHESIOLOGIST,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[3],
+    surgeryId: SURGERY_2_ID,
+    doctorId: DOCTOR_2_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[4],
+    surgeryId: SURGERY_2_ID,
+    doctorId: DOCTOR_3_ID,
+    role: SurgeryDoctorRole.ASSISTANT,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[5],
+    surgeryId: SURGERY_2_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.ANESTHESIOLOGIST,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[6],
+    surgeryId: SURGERY_3_ID,
+    doctorId: DOCTOR_3_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[7],
+    surgeryId: SURGERY_3_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.ASSISTANT,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[8],
+    surgeryId: SURGERY_4_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[9],
+    surgeryId: SURGERY_4_ID,
+    doctorId: DOCTOR_3_ID,
+    role: SurgeryDoctorRole.ANESTHESIOLOGIST,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[10],
+    surgeryId: SURGERY_5_ID,
+    doctorId: DOCTOR_2_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[11],
+    surgeryId: SURGERY_5_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.ASSISTANT,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[12],
+    surgeryId: SURGERY_6_ID,
+    doctorId: DOCTOR_3_ID,
+    role: SurgeryDoctorRole.PRINCIPAL,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[13],
+    surgeryId: SURGERY_6_ID,
+    doctorId: DOCTOR_2_ID,
+    role: SurgeryDoctorRole.ASSISTANT,
+  },
+  {
+    id: SURGERY_DOCTOR_IDS[14],
+    surgeryId: SURGERY_6_ID,
+    doctorId: DOCTOR_1_ID,
+    role: SurgeryDoctorRole.ANESTHESIOLOGIST,
+  },
 ];
 
 const PAYMENT_PLAN_SPECS: SeedPaymentPlan[] = [
@@ -769,7 +885,8 @@ function buildOutstandingBalances(): Map<string, string> {
   const balances = new Map<string, string>();
   const installmentsByPlan = new Map<string, SeedInstallment[]>();
   for (const installment of buildInstallments()) {
-    const planInstallments = installmentsByPlan.get(installment.paymentPlanId) ?? [];
+    const planInstallments =
+      installmentsByPlan.get(installment.paymentPlanId) ?? [];
     planInstallments.push(installment);
     installmentsByPlan.set(installment.paymentPlanId, planInstallments);
   }
@@ -791,10 +908,16 @@ function buildOutstandingBalances(): Map<string, string> {
 
     const paidPrincipal = (installmentsByPlan.get(spec.id) ?? [])
       .filter((installment) => installment.status === InstallmentStatus.PAID)
-      .reduce((sum, installment) => sum.plus(installment.principalAmount), new Decimal(0));
+      .reduce(
+        (sum, installment) => sum.plus(installment.principalAmount),
+        new Decimal(0),
+      );
     const partialPaid = (installmentsByPlan.get(spec.id) ?? [])
       .filter((installment) => installment.status === InstallmentStatus.PARTIAL)
-      .reduce((sum, installment) => sum.plus(installment.paidAmount), new Decimal(0));
+      .reduce(
+        (sum, installment) => sum.plus(installment.paidAmount),
+        new Decimal(0),
+      );
     const amortized = spec.amortizations.reduce(
       (sum, amount) => sum.plus(amount),
       new Decimal(0),
@@ -971,7 +1094,11 @@ const AUDIT_LOGS: SeedAuditLog[] = [
     tableName: 'payment_plans',
     recordId: PLAN_1_ID,
     previousData: null,
-    newData: { type: 'credit', financed_amount: '40000.00', installment_count: 12 },
+    newData: {
+      type: 'credit',
+      financed_amount: '40000.00',
+      installment_count: 12,
+    },
     createdAt: '2026-06-01T14:30:00.000Z',
   },
   {
@@ -1021,7 +1148,11 @@ const AUDIT_LOGS: SeedAuditLog[] = [
     tableName: 'payment_plans',
     recordId: PLAN_2_ID,
     previousData: null,
-    newData: { type: 'credit', financed_amount: '30000.00', installment_count: 6 },
+    newData: {
+      type: 'credit',
+      financed_amount: '30000.00',
+      installment_count: 6,
+    },
     createdAt: '2026-07-01T11:00:00.000Z',
   },
   {
@@ -1031,7 +1162,11 @@ const AUDIT_LOGS: SeedAuditLog[] = [
     tableName: 'payment_plans',
     recordId: PLAN_3_ID,
     previousData: null,
-    newData: { type: 'upfront', financed_amount: '28000.00', installment_count: 1 },
+    newData: {
+      type: 'upfront',
+      financed_amount: '28000.00',
+      installment_count: 1,
+    },
     createdAt: '2026-06-01T15:00:00.000Z',
   },
   {
@@ -1061,7 +1196,10 @@ const AUDIT_LOGS: SeedAuditLog[] = [
     tableName: 'whatsapp_dispatches',
     recordId: DISPATCH_IDS[4],
     previousData: { status: 'queued' },
-    newData: { status: 'failed', provider_error: 'ERR 80009: recipient not reachable' },
+    newData: {
+      status: 'failed',
+      provider_error: 'ERR 80009: recipient not reachable',
+    },
     createdAt: '2026-08-05T17:30:00.000Z',
   },
   {
@@ -1108,7 +1246,11 @@ const MESSAGE_TEMPLATES: SeedMessageTemplate[] = [
     language: 'es',
     bodyTemplate:
       'Estimado(a) {{1}}, su cirugia de {{2}} esta programada para el {{3}}. Presentese 2 horas antes.',
-    sampleVariables: { '1': 'Marta Rios', '2': 'Colecistectomia', '3': '2026-08-20' },
+    sampleVariables: {
+      '1': 'Marta Rios',
+      '2': 'Colecistectomia',
+      '3': '2026-08-20',
+    },
     status: TemplateStatus.SUBMITTED,
     providerTemplateId: 'HBT_SURGERY_CONFIRM',
     providerStatus: 'pending',
@@ -1134,7 +1276,8 @@ const MESSAGE_TEMPLATES: SeedMessageTemplate[] = [
     name: 'feedback_survey',
     category: TemplateCategory.MARKETING,
     language: 'es',
-    bodyTemplate: 'Estimado(a) {{1}}, cuentenos como fue su experiencia en {{2}}.',
+    bodyTemplate:
+      'Estimado(a) {{1}}, cuentenos como fue su experiencia en {{2}}.',
     sampleVariables: {},
     status: TemplateStatus.DRAFT,
     providerTemplateId: null,

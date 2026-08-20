@@ -179,9 +179,27 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       [surgeryRows[0].id],
     );
     const installments = [
-      { number: 1, total: '1113.27', paid: '500.00', due: '2020-01-01', status: 'partial' },
-      { number: 2, total: '1113.27', paid: '0.00', due: NEXT_DUE_DATE, status: 'pending' },
-      { number: 3, total: '1113.27', paid: '0.00', due: '2999-01-01', status: 'pending' },
+      {
+        number: 1,
+        total: '1113.27',
+        paid: '500.00',
+        due: '2020-01-01',
+        status: 'partial',
+      },
+      {
+        number: 2,
+        total: '1113.27',
+        paid: '0.00',
+        due: NEXT_DUE_DATE,
+        status: 'pending',
+      },
+      {
+        number: 3,
+        total: '1113.27',
+        paid: '0.00',
+        due: '2999-01-01',
+        status: 'pending',
+      },
     ];
     for (const installment of installments) {
       await dataSource.query(
@@ -248,7 +266,9 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
     return rows[0];
   }
 
-  async function outboundMessages(conversationId: string): Promise<MessageRow[]> {
+  async function outboundMessages(
+    conversationId: string,
+  ): Promise<MessageRow[]> {
     return dataSource.query(
       `SELECT id, body, type, template_id AS "templateId", intent,
               provider_message_id AS "providerMessageId", metadata
@@ -431,7 +451,8 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
   describe('identity document verification (awaiting_document state)', () => {
     it('identifies when the document matches a phone candidate (case and whitespace insensitive)', async () => {
       const { patientA, canonical } = await twoCandidatesFor(uniquePhone());
-      const document = `DOC${RUN_SUFFIX.slice(-6)}${uniqueCounter++}`.toUpperCase();
+      const document =
+        `DOC${RUN_SUFFIX.slice(-6)}${uniqueCounter++}`.toUpperCase();
       // patientA already carries a generated document; re-insert with a known one.
       await dataSource.query(
         `UPDATE patients SET identity_document = $1 WHERE id = $2`,
@@ -489,7 +510,9 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       );
       const audits = await auditsForRecordIds([conversation.id]);
       expect(
-        audits.some((audit) => audit.action === 'bot_conversation.identification_failed'),
+        audits.some(
+          (audit) => audit.action === 'bot_conversation.identification_failed',
+        ),
       ).toBe(false);
     });
 
@@ -497,7 +520,12 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       const { canonical } = await twoCandidatesFor(uniquePhone());
       const before = nowSeconds();
 
-      await botService.processInbound(canonical, 'wamid.bot.lock.1', 'hola', before);
+      await botService.processInbound(
+        canonical,
+        'wamid.bot.lock.1',
+        'hola',
+        before,
+      );
       await botService.processInbound(
         canonical,
         'wamid.bot.lock.2',
@@ -522,7 +550,9 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       expect(conversation.lockoutUntil).not.toBeNull();
       // lockout_until ≈ now + 24h
       const lockoutMs = new Date(conversation.lockoutUntil!).getTime();
-      expect(lockoutMs - (before + 3) * 1000).toBeGreaterThan(23 * 60 * 60 * 1000);
+      expect(lockoutMs - (before + 3) * 1000).toBeGreaterThan(
+        23 * 60 * 60 * 1000,
+      );
       expect(lockoutMs - (before + 3) * 1000).toBeLessThan(25 * 60 * 60 * 1000);
 
       const outbound = await outboundMessages(conversation.id);
@@ -542,10 +572,14 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
 
     it('ignores attempts during an active lockout: guidance re-sent, NO increment (spec "Soft lock after three failures")', async () => {
       const { canonical } = await twoCandidatesFor(uniquePhone());
-      const conversation = await insertConversation(canonical, 'awaiting_document', {
-        failedAttempts: 3,
-        lockoutUntil: new Date(Date.now() + 60 * 60 * 1000),
-      });
+      const conversation = await insertConversation(
+        canonical,
+        'awaiting_document',
+        {
+          failedAttempts: 3,
+          lockoutUntil: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      );
 
       const result = await botService.processInbound(
         canonical,
@@ -565,16 +599,22 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       );
       const audits = await auditsForRecordIds([conversation.id]);
       expect(
-        audits.some((audit) => audit.action === 'bot_conversation.identification_failed'),
+        audits.some(
+          (audit) => audit.action === 'bot_conversation.identification_failed',
+        ),
       ).toBe(false);
     });
 
     it('resets counters when the lockout expired, then counts the next failure as attempt 1 (finding 2 — CHECK 23514 unreachable)', async () => {
       const { canonical } = await twoCandidatesFor(uniquePhone());
-      const conversation = await insertConversation(canonical, 'awaiting_document', {
-        failedAttempts: 3,
-        lockoutUntil: new Date(Date.now() - 60 * 60 * 1000), // expired
-      });
+      const conversation = await insertConversation(
+        canonical,
+        'awaiting_document',
+        {
+          failedAttempts: 3,
+          lockoutUntil: new Date(Date.now() - 60 * 60 * 1000), // expired
+        },
+      );
 
       const result = await botService.processInbound(
         canonical,
@@ -601,7 +641,8 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
 
   describe('identified conversation — menu intents inside the CSW window', () => {
     it('answers saldo with the debt decimal strings and reuses the same conversation (spec "Existing conversation reused")', async () => {
-      const { conversationId, canonical, patientId } = await identifiedWithDebt();
+      const { conversationId, canonical, patientId } =
+        await identifiedWithDebt();
 
       await botService.processInbound(
         canonical,
@@ -632,7 +673,9 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       expect(last.metadata).toMatchObject({ status: 'sent' });
       expect(last.providerMessageId).toMatch(/^wamid\.mock\.\d+$/);
       const sentAudits = await auditsForRecordIds([last.id]);
-      expect(sentAudits.some((a) => a.action === 'bot_message.sent')).toBe(true);
+      expect(sentAudits.some((a) => a.action === 'bot_message.sent')).toBe(
+        true,
+      );
     });
 
     it('answers cuotas with the next-due installment detail', async () => {
@@ -809,7 +852,9 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
       const last = outbound[outbound.length - 1];
       expect(last.metadata.status).toBe('failed');
       expect(last.providerMessageId).toBeNull();
-      expect(String(last.metadata.error)).toContain('Mock provider forced failure');
+      expect(String(last.metadata.error)).toContain(
+        'Mock provider forced failure',
+      );
     });
 
     it('rolls back the outbound message AND its audit together (message+audit atomicity)', async () => {
@@ -869,7 +914,12 @@ describe('BotService (tasks 5.3–5.4, design §9.4)', () => {
         );
       const documentA = patientRows[0].identityDocument;
 
-      await botService.processInbound(canonical, 'wamid.bot.pii.1', 'hola', nowSeconds());
+      await botService.processInbound(
+        canonical,
+        'wamid.bot.pii.1',
+        'hola',
+        nowSeconds(),
+      );
       await botService.processInbound(
         canonical,
         'wamid.bot.pii.2',

@@ -10,11 +10,7 @@ import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { User } from './entities/user.entity';
-import {
-  CreateStaffUserDto,
-  CreateUserDto,
-  LoginUserDto,
-} from './dto';
+import { CreateStaffUserDto, CreateUserDto, LoginUserDto } from './dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { JwtService } from '@nestjs/jwt';
 import { Profile } from '../profile/entities/profile.entity';

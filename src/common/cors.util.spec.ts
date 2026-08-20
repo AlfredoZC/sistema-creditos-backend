@@ -11,7 +11,9 @@ describe('resolveCorsOrigins', () => {
   });
 
   it('returns a single prod origin unchanged', () => {
-    expect(resolveCorsOrigins('https://app.example.com')).toEqual(['https://app.example.com']);
+    expect(resolveCorsOrigins('https://app.example.com')).toEqual([
+      'https://app.example.com',
+    ]);
   });
 
   it('splits comma-separated origins and trims spaces', () => {

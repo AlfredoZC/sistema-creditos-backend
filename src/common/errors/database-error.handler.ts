@@ -37,13 +37,19 @@ export function handleDatabaseError(error: unknown): never {
   const code = extractPostgresErrorCode(error);
   switch (code) {
     case POSTGRES_UNIQUE_VIOLATION:
-      throw new ConflictException('Unique constraint violation — the resource already exists');
+      throw new ConflictException(
+        'Unique constraint violation — the resource already exists',
+      );
     case POSTGRES_FOREIGN_KEY_VIOLATION:
       throw new NotFoundException('Referenced record does not exist');
     case POSTGRES_CHECK_VIOLATION:
-      throw new BadRequestException('Value violates a database check constraint');
+      throw new BadRequestException(
+        'Value violates a database check constraint',
+      );
     case POSTGRES_INVALID_TEXT_REPRESENTATION:
-      throw new BadRequestException('Invalid value format for the database column');
+      throw new BadRequestException(
+        'Invalid value format for the database column',
+      );
     default:
       throw new InternalServerErrorException('Unexpected database error');
   }

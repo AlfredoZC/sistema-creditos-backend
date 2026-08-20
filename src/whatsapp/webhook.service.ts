@@ -30,7 +30,8 @@ export function isEffectiveDispatchTransition(
 ): boolean {
   return (
     (current === DispatchStatus.SENT &&
-      (incoming === DispatchStatus.DELIVERED || incoming === DispatchStatus.FAILED)) ||
+      (incoming === DispatchStatus.DELIVERED ||
+        incoming === DispatchStatus.FAILED)) ||
     (current === DispatchStatus.DELIVERED && incoming === DispatchStatus.READ)
   );
 }
@@ -115,7 +116,10 @@ export class WebhookService {
     ) {
       throw new BadRequestException('Missing handshake parameters');
     }
-    if (mode !== 'subscribe' || !this.signatureService.verifyVerifyToken(verifyToken)) {
+    if (
+      mode !== 'subscribe' ||
+      !this.signatureService.verifyVerifyToken(verifyToken)
+    ) {
       throw new ForbiddenException('Invalid verify token');
     }
     return challenge;
@@ -135,7 +139,11 @@ export class WebhookService {
       this.configService.get<string>('WHATSAPP_APP_SECRET') ?? '';
     const signatureValid =
       rawBody !== undefined &&
-      this.signatureService.verifyBodySignature(rawBody, signatureHeader, appSecret);
+      this.signatureService.verifyBodySignature(
+        rawBody,
+        signatureHeader,
+        appSecret,
+      );
     if (!signatureValid) {
       if (!signatureHeader) {
         throw new UnauthorizedException('Missing webhook signature');
@@ -169,7 +177,10 @@ export class WebhookService {
    * (`entry[].changes[].field === 'messages'` → `value.statuses` /
    * `value.messages`).
    */
-  private collectArray(payload: WebhookPayload, key: 'statuses' | 'messages'): unknown[] {
+  private collectArray(
+    payload: WebhookPayload,
+    key: 'statuses' | 'messages',
+  ): unknown[] {
     const collected: unknown[] = [];
     const flat = payload[key];
     if (Array.isArray(flat)) {
@@ -216,7 +227,11 @@ export class WebhookService {
         const previousStatus = dispatch.status;
         dispatch.status = incoming;
         const saved = await manager.save(dispatch);
-        await this.logDispatchStatusChangedAudit(manager, saved, previousStatus);
+        await this.logDispatchStatusChangedAudit(
+          manager,
+          saved,
+          previousStatus,
+        );
       });
     }
   }
@@ -235,12 +250,16 @@ export class WebhookService {
       if (!isRecord(message)) continue;
       const waId = message['from'];
       const messageId = message['id'];
-      const body = isRecord(message['text']) ? message['text']['body'] : undefined;
+      const body = isRecord(message['text'])
+        ? message['text']['body']
+        : undefined;
       if (typeof waId !== 'string' || typeof messageId !== 'string') {
         continue;
       }
       const timestamp =
-        typeof message['timestamp'] === 'string' ? message['timestamp'] : undefined;
+        typeof message['timestamp'] === 'string'
+          ? message['timestamp']
+          : undefined;
       await this.botService.processInbound(
         waId,
         messageId,
@@ -257,7 +276,9 @@ export class WebhookService {
    * throws: unknown events, unknown templates and regressions are no-ops, so
    * this path always answers 200.
    */
-  private async processTemplateStatusUpdates(payload: WebhookPayload): Promise<void> {
+  private async processTemplateStatusUpdates(
+    payload: WebhookPayload,
+  ): Promise<void> {
     const updates: Record<string, unknown>[] = [];
     const flat = payload['message_template_status_update'];
     if (Array.isArray(flat)) {
@@ -278,7 +299,10 @@ export class WebhookService {
       if (typeof providerTemplateId !== 'string' || typeof event !== 'string') {
         continue;
       }
-      await this.templatesService.mirrorProviderStatus(providerTemplateId, event);
+      await this.templatesService.mirrorProviderStatus(
+        providerTemplateId,
+        event,
+      );
     }
   }
 

@@ -16,7 +16,11 @@ export class FinancingEngine {
    * Fixed-installment amount A = P*i/(1-(1+i)^-n), HALF_UP to 2 decimals.
    * For i=0 the installment is P/n. `monthlyInterestRate` is a percentage ('2.00' = 2%).
    */
-  computeInstallment(principal: string, monthlyInterestRate: string, installmentCount: number): string {
+  computeInstallment(
+    principal: string,
+    monthlyInterestRate: string,
+    installmentCount: number,
+  ): string {
     const principalAmount = new Decimal(principal);
     const monthlyRate = this.toMonthlyRate(monthlyInterestRate);
     if (monthlyRate.isZero()) {
@@ -25,9 +29,15 @@ export class FinancingEngine {
         .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING)
         .toFixed(MONEY_DECIMALS);
     }
-    const discountFactor = new Decimal(1).div(new Decimal(1).add(monthlyRate).pow(installmentCount));
-    const installment = principalAmount.mul(monthlyRate).div(new Decimal(1).sub(discountFactor));
-    return installment.toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING).toFixed(MONEY_DECIMALS);
+    const discountFactor = new Decimal(1).div(
+      new Decimal(1).add(monthlyRate).pow(installmentCount),
+    );
+    const installment = principalAmount
+      .mul(monthlyRate)
+      .div(new Decimal(1).sub(discountFactor));
+    return installment
+      .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING)
+      .toFixed(MONEY_DECIMALS);
   }
 
   /**
@@ -41,19 +51,31 @@ export class FinancingEngine {
     installmentCount: number,
     startDate: Date,
   ): ScheduleLine[] {
-    const installmentAmount = new Decimal(this.computeInstallment(principal, monthlyInterestRate, installmentCount));
+    const installmentAmount = new Decimal(
+      this.computeInstallment(principal, monthlyInterestRate, installmentCount),
+    );
     const monthlyRate = this.toMonthlyRate(monthlyInterestRate);
     let outstandingBalance = new Decimal(principal);
     const lines: ScheduleLine[] = [];
-    for (let installmentNumber = 1; installmentNumber <= installmentCount; installmentNumber++) {
-      const interestAmount = outstandingBalance.mul(monthlyRate).toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
+    for (
+      let installmentNumber = 1;
+      installmentNumber <= installmentCount;
+      installmentNumber++
+    ) {
+      const interestAmount = outstandingBalance
+        .mul(monthlyRate)
+        .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
       const isLastLine = installmentNumber === installmentCount;
-      const principalAmount = isLastLine ? outstandingBalance : installmentAmount.minus(interestAmount);
+      const principalAmount = isLastLine
+        ? outstandingBalance
+        : installmentAmount.minus(interestAmount);
       lines.push({
         installmentNumber,
         principalAmount: principalAmount.toFixed(MONEY_DECIMALS),
         interestAmount: interestAmount.toFixed(MONEY_DECIMALS),
-        totalAmount: principalAmount.plus(interestAmount).toFixed(MONEY_DECIMALS),
+        totalAmount: principalAmount
+          .plus(interestAmount)
+          .toFixed(MONEY_DECIMALS),
         dueDate: addMonthsClamped(startDate, installmentNumber),
       });
       outstandingBalance = outstandingBalance.minus(principalAmount);
@@ -78,6 +100,10 @@ function addMonthsClamped(startDate: Date, months: number): Date {
   const targetMonthIndex = startMonth + months;
   const targetYear = startYear + Math.floor(targetMonthIndex / 12);
   const targetMonth = targetMonthIndex % 12;
-  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(targetYear, targetMonth, Math.min(startDay, lastDayOfTargetMonth)));
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  return new Date(
+    Date.UTC(targetYear, targetMonth, Math.min(startDay, lastDayOfTargetMonth)),
+  );
 }

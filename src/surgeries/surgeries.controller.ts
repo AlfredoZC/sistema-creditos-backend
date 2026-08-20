@@ -61,7 +61,10 @@ export class SurgeriesController {
 
   @Patch(':id/status')
   @Auth(UserRole.OFFICE, UserRole.ADMIN)
-  @ApiResponse({ status: 200, description: 'Surgery status updated and audited' })
+  @ApiResponse({
+    status: 200,
+    description: 'Surgery status updated and audited',
+  })
   @ApiResponse({ status: 400, description: 'Invalid status value' })
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,

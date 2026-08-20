@@ -23,7 +23,10 @@ function buildPendingInstallments(
   }));
 }
 
-function sumAmounts(lines: RecalculatedInstallment[], amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount'): string {
+function sumAmounts(
+  lines: RecalculatedInstallment[],
+  amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount',
+): string {
   return lines
     .reduce((total, line) => total.plus(line[amountKey]), new Decimal('0.00'))
     .toFixed(2);
@@ -85,7 +88,9 @@ describe('ReduceTermRecalculationStrategy (design section 7 — keep installment
       pendingInstallments: buildPendingInstallments(8, { firstNumber: 3 }),
     };
 
-    const pendingLines = strategy.recalculate(context).filter((line) => line.status === InstallmentStatus.PENDING);
+    const pendingLines = strategy
+      .recalculate(context)
+      .filter((line) => line.status === InstallmentStatus.PENDING);
 
     expect(sumAmounts(pendingLines, 'principalAmount')).toBe('5155.19');
     expect(sumAmounts(pendingLines, 'totalAmount')).toBe('5464.58');
@@ -98,11 +103,17 @@ describe('ReduceTermRecalculationStrategy (design section 7 — keep installment
       pendingInstallments: buildPendingInstallments(8, { firstNumber: 3 }),
     };
 
-    const cancelledLines = strategy.recalculate(context).filter((line) => line.status === InstallmentStatus.CANCELLED);
+    const cancelledLines = strategy
+      .recalculate(context)
+      .filter((line) => line.status === InstallmentStatus.CANCELLED);
 
     expect(cancelledLines).toHaveLength(3);
-    expect(cancelledLines.every((line) => line.totalAmount === '1113.27')).toBe(true);
-    expect(cancelledLines.every((line) => line.interestAmount === '0.00')).toBe(true);
+    expect(cancelledLines.every((line) => line.totalAmount === '1113.27')).toBe(
+      true,
+    );
+    expect(cancelledLines.every((line) => line.interestAmount === '0.00')).toBe(
+      true,
+    );
   });
 
   it('cancels every pending installment when the outstanding balance is 0.00 (no recompute)', () => {
@@ -115,8 +126,12 @@ describe('ReduceTermRecalculationStrategy (design section 7 — keep installment
     const recalculated = strategy.recalculate(context);
 
     expect(recalculated).toHaveLength(8);
-    expect(recalculated.every((line) => line.status === InstallmentStatus.CANCELLED)).toBe(true);
-    expect(recalculated.every((line) => line.totalAmount === '1113.27')).toBe(true);
+    expect(
+      recalculated.every((line) => line.status === InstallmentStatus.CANCELLED),
+    ).toBe(true);
+    expect(recalculated.every((line) => line.totalAmount === '1113.27')).toBe(
+      true,
+    );
   });
 
   it('returns an empty result when there are no pending installments', () => {
@@ -154,18 +169,29 @@ describe('ReduceTermRecalculationStrategy (design section 7 — keep installment
     const context: InstallmentRecalculationContext = {
       outstandingBalance: '1000.00',
       monthlyInterestRate: '0.00',
-      pendingInstallments: buildPendingInstallments(4, { firstNumber: 3, totalAmount: '333.33' }),
+      pendingInstallments: buildPendingInstallments(4, {
+        firstNumber: 3,
+        totalAmount: '333.33',
+      }),
     };
 
     const recalculated = strategy.recalculate(context);
 
-    expect(recalculated.map((line) => [line.principalAmount, line.interestAmount, line.totalAmount])).toEqual([
+    expect(
+      recalculated.map((line) => [
+        line.principalAmount,
+        line.interestAmount,
+        line.totalAmount,
+      ]),
+    ).toEqual([
       ['333.33', '0.00', '333.33'],
       ['333.33', '0.00', '333.33'],
       ['333.33', '0.00', '333.33'],
       ['0.01', '0.00', '0.01'],
     ]);
-    expect(recalculated.every((line) => line.status === InstallmentStatus.PENDING)).toBe(true);
+    expect(
+      recalculated.every((line) => line.status === InstallmentStatus.PENDING),
+    ).toBe(true);
   });
 
   it('throws when the pending installments are exhausted before the balance is settled', () => {

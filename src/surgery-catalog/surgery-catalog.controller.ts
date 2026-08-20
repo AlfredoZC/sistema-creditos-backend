@@ -18,9 +18,7 @@ import { SurgeryCatalogService } from './surgery-catalog.service';
 @ApiTags('Surgery Catalog')
 @Controller('surgery-catalog')
 export class SurgeryCatalogController {
-  constructor(
-    private readonly surgeryCatalogService: SurgeryCatalogService,
-  ) {}
+  constructor(private readonly surgeryCatalogService: SurgeryCatalogService) {}
 
   @Post()
   @Auth(UserRole.OFFICE, UserRole.ADMIN)

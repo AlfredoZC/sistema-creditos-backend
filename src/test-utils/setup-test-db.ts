@@ -90,7 +90,9 @@ async function withMigrationLock(action: () => Promise<void>): Promise<void> {
     await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
     await action();
   } finally {
-    await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]);
+    await lockClient.query('SELECT pg_advisory_unlock($1)', [
+      MIGRATION_LOCK_ID,
+    ]);
     lockClient.release();
     await lockPool.end();
   }
@@ -105,7 +107,9 @@ export async function dropTestDatabaseForFreshRun(): Promise<void> {
   await withMigrationLock(async () => {
     const maintenancePool = getMaintenancePool();
     try {
-      await maintenancePool.query(`DROP DATABASE IF EXISTS ${TEST_DATABASE_NAME} WITH (FORCE)`);
+      await maintenancePool.query(
+        `DROP DATABASE IF EXISTS ${TEST_DATABASE_NAME} WITH (FORCE)`,
+      );
     } finally {
       await maintenancePool.end();
     }

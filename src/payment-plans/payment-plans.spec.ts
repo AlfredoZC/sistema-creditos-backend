@@ -166,7 +166,9 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
 
   // userId optional: NULL = hybrid model (no web account), provided = the
   // patient owns a user account (needed for the own-plan read scenarios).
-  async function createPatientRaw(userId: string | null = null): Promise<string> {
+  async function createPatientRaw(
+    userId: string | null = null,
+  ): Promise<string> {
     const rows: IdRow[] = await dataSource.query(
       `INSERT INTO patients (user_id, identity_document, first_name, paternal_last_name, phone)
        VALUES ($1, $2, $3, $4, $5)
@@ -194,7 +196,10 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
         baseCost: '8000.00',
       });
     expect(response.status).toBe(201);
-    return { id: response.body.id as string, baseCost: response.body.baseCost as string };
+    return {
+      id: response.body.id as string,
+      baseCost: response.body.baseCost as string,
+    };
   }
 
   async function createSurgery(
@@ -239,7 +244,10 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
     const created = await request(app.getHttpServer())
       .post('/api/payment-methods')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: `Method-${RUN_SUFFIX}-${uniqueCounter++}`, isEnabled: true });
+      .send({
+        name: `Method-${RUN_SUFFIX}-${uniqueCounter++}`,
+        isEnabled: true,
+      });
     expect(created.status).toBe(201);
     const disabled = await request(app.getHttpServer())
       .patch(`/api/payment-methods/${created.body.id as string}`)
@@ -522,7 +530,9 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
     });
 
     it('rejects unauthenticated requests with 401', async () => {
-      const response = await request(app.getHttpServer()).post('/api/payment-plans');
+      const response = await request(app.getHttpServer()).post(
+        '/api/payment-plans',
+      );
       expect(response.status).toBe(401);
     });
   });
@@ -919,7 +929,10 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       });
       expect(created.status).toBe(201);
 
-      const response = await getPlan(otherPatient.token, created.body.id as string);
+      const response = await getPlan(
+        otherPatient.token,
+        created.body.id as string,
+      );
 
       expect(response.status).toBe(403);
     });
@@ -1022,13 +1035,18 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       });
       expect(created.status).toBe(201);
 
-      const response = await getInstallments(patient.token, created.body.id as string);
+      const response = await getInstallments(
+        patient.token,
+        created.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveLength(6);
-      expect(response.body.map((row: { installmentNumber: number }) => row.installmentNumber)).toEqual(
-        [1, 2, 3, 4, 5, 6],
-      );
+      expect(
+        response.body.map(
+          (row: { installmentNumber: number }) => row.installmentNumber,
+        ),
+      ).toEqual([1, 2, 3, 4, 5, 6]);
       expect(response.body[0].totalAmount).toBe('1071.15');
     });
 
@@ -1156,9 +1174,8 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
     it(`returns the hybrid patient summary with pinned values 8155.19 / 1113.27 / ${NEXT_DUE_DATE} / 613.27`, async () => {
       const { patientId } = await hybridPatientWithPinnedDebt();
 
-      const summary = await paymentPlansService.getPatientDebtSummary(
-        patientId,
-      );
+      const summary =
+        await paymentPlansService.getPatientDebtSummary(patientId);
 
       expect(summary).toEqual({
         outstandingBalance: '8155.19',
@@ -1174,9 +1191,8 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
     it('returns the zero summary for a patient without a payment plan', async () => {
       const patientId = await createPatientRaw();
 
-      const summary = await paymentPlansService.getPatientDebtSummary(
-        patientId,
-      );
+      const summary =
+        await paymentPlansService.getPatientDebtSummary(patientId);
 
       expect(summary).toEqual({
         outstandingBalance: '0.00',
@@ -1197,9 +1213,8 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
         [planId],
       );
 
-      const summary = await paymentPlansService.getPatientDebtSummary(
-        patientId,
-      );
+      const summary =
+        await paymentPlansService.getPatientDebtSummary(patientId);
 
       expect(summary).toEqual({
         outstandingBalance: '8155.19',
@@ -1282,7 +1297,12 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
     it('lets an office user list all plans ordered by startDate DESC', async () => {
       const office = await officeUser();
       const later = await planFor(office.token, null, '6000.00', '2026-06-01');
-      const earlier = await planFor(office.token, null, '4000.00', '2026-03-15');
+      const earlier = await planFor(
+        office.token,
+        null,
+        '4000.00',
+        '2026-03-15',
+      );
 
       const response = await listPlans(office.token, { limit: 100, offset: 0 });
 
@@ -1294,7 +1314,9 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       const ids = response.body.data.map(
         (plan: { id: string }) => plan.id as string,
       );
-      expect(ids.indexOf(later.planId)).toBeLessThan(ids.indexOf(earlier.planId));
+      expect(ids.indexOf(later.planId)).toBeLessThan(
+        ids.indexOf(earlier.planId),
+      );
     });
 
     it('lets staff combine the patientId, surgeryId and status filters', async () => {
@@ -1396,8 +1418,16 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       };
       const p1PatientId = await createPatientRaw(p1.id);
       const p2PatientId = await createPatientRaw(p2.id);
-      const p1First = await planForPatient(p1PatientId, '6000.00', '2026-06-01');
-      const p1Second = await planForPatient(p1PatientId, '4000.00', '2026-03-15');
+      const p1First = await planForPatient(
+        p1PatientId,
+        '6000.00',
+        '2026-06-01',
+      );
+      const p1Second = await planForPatient(
+        p1PatientId,
+        '4000.00',
+        '2026-03-15',
+      );
       const p2Only = await planForPatient(p2PatientId, '5000.00', '2026-05-01');
 
       const response = await listPlans(p1.token, { limit: 100, offset: 0 });
@@ -1407,7 +1437,9 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
         (plan: { id: string }) => plan.id as string,
       );
       expect(ids).toHaveLength(2);
-      expect(ids).toEqual(expect.arrayContaining([p1First.planId, p1Second.planId]));
+      expect(ids).toEqual(
+        expect.arrayContaining([p1First.planId, p1Second.planId]),
+      );
       expect(ids).not.toContain(p2Only.planId);
 
       // The in-memory own-scope applies regardless of filters (AD9: filters
@@ -1437,12 +1469,22 @@ describe('payment plans API (design sections 5.8, 5.9, 8.1-T1 and 11)', () => {
       const response = await listPlans(patient.token, { limit: 10, offset: 0 });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ data: [], total: 0, limit: 10, offset: 0 });
+      expect(response.body).toEqual({
+        data: [],
+        total: 0,
+        limit: 10,
+        offset: 0,
+      });
     });
 
     it('returns summary rows without embedded installments', async () => {
       const office = await officeUser();
-      const created = await planFor(office.token, null, '6000.00', '2026-06-01');
+      const created = await planFor(
+        office.token,
+        null,
+        '6000.00',
+        '2026-06-01',
+      );
 
       const response = await listPlans(office.token, {
         patientId: created.patientId,

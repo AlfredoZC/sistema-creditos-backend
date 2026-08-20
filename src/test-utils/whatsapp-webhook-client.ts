@@ -36,13 +36,11 @@ export function buildHandshakeGet(
   verifyToken: string,
   challenge = 'abc123',
 ): request.Test {
-  return request(app.getHttpServer())
-    .get(path)
-    .query({
-      'hub.mode': 'subscribe',
-      'hub.verify_token': verifyToken,
-      'hub.challenge': challenge,
-    });
+  return request(app.getHttpServer()).get(path).query({
+    'hub.mode': 'subscribe',
+    'hub.verify_token': verifyToken,
+    'hub.challenge': challenge,
+  });
 }
 
 /**

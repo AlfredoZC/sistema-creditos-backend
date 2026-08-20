@@ -50,6 +50,9 @@ export function normalizePhone(input: string): string {
  * Every phone comparison MUST normalize both sides before comparing
  * (patient-management spec — "Legacy format matches canonical at lookup").
  */
-export function phoneMatchesLeftNormalized(left: string, right: string): boolean {
+export function phoneMatchesLeftNormalized(
+  left: string,
+  right: string,
+): boolean {
   return normalizePhone(left) === normalizePhone(right);
 }

@@ -4,7 +4,12 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { PaymentPlansModule } from '../payment-plans/payment-plans.module';
-import { BotConversation, BotMessage, MessageTemplate, WhatsAppDispatch } from './entities';
+import {
+  BotConversation,
+  BotMessage,
+  MessageTemplate,
+  WhatsAppDispatch,
+} from './entities';
 import { createProvider } from './provider/whatsapp-provider.factory';
 import { BotService } from './bot.service';
 import { DispatchesController } from './dispatches.controller';
@@ -39,11 +44,7 @@ import { WHATSAPP_PROVIDER } from './provider/whatsapp-provider.token';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PaymentPlansModule,
   ],
-  controllers: [
-    TemplatesController,
-    DispatchesController,
-    WebhookController,
-  ],
+  controllers: [TemplatesController, DispatchesController, WebhookController],
   providers: [
     TemplatesService,
     DispatchesService,

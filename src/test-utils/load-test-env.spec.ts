@@ -15,7 +15,9 @@ describe('load-test-env (harness contract, design section 12)', () => {
   });
 
   it('fails loudly when DB_NAME is not the test database', () => {
-    expect(() => assertTestDatabaseName('db_creditos')).toThrow(/db_creditos_test/);
+    expect(() => assertTestDatabaseName('db_creditos')).toThrow(
+      /db_creditos_test/,
+    );
     expect(() => assertTestDatabaseName(undefined)).toThrow(/db_creditos_test/);
     expect(() => assertTestDatabaseName('')).toThrow(/db_creditos_test/);
   });

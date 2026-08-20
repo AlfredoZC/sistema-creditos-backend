@@ -19,34 +19,54 @@ const HALF_UP_ROUNDING = Decimal.ROUND_HALF_UP;
 export class ReduceTermRecalculationStrategy implements InstallmentRecalculationStrategy {
   readonly mode = AmortizationMode.REDUCE_TERM;
 
-  recalculate(context: InstallmentRecalculationContext): RecalculatedInstallment[] {
+  recalculate(
+    context: InstallmentRecalculationContext,
+  ): RecalculatedInstallment[] {
     if (new Decimal(context.outstandingBalance).isZero()) {
       return context.pendingInstallments.map(cancelInPlace);
     }
     if (context.pendingInstallments.length === 0) {
       return [];
     }
-    const installmentAmount = new Decimal(context.pendingInstallments[0].totalAmount);
+    const installmentAmount = new Decimal(
+      context.pendingInstallments[0].totalAmount,
+    );
     const monthlyRate = new Decimal(context.monthlyInterestRate).div(100);
     let outstandingBalance = new Decimal(context.outstandingBalance);
     const recalculated: RecalculatedInstallment[] = [];
     for (let index = 0; index < context.pendingInstallments.length; index++) {
-      if (outstandingBalance.mul(new Decimal(1).plus(monthlyRate)).lte(installmentAmount)) {
-        const interestAmount = outstandingBalance.mul(monthlyRate).toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
+      if (
+        outstandingBalance
+          .mul(new Decimal(1).plus(monthlyRate))
+          .lte(installmentAmount)
+      ) {
+        const interestAmount = outstandingBalance
+          .mul(monthlyRate)
+          .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
         recalculated.push({
           id: context.pendingInstallments[index].id,
           principalAmount: outstandingBalance.toFixed(MONEY_DECIMALS),
           interestAmount: interestAmount.toFixed(MONEY_DECIMALS),
-          totalAmount: outstandingBalance.plus(interestAmount).toFixed(MONEY_DECIMALS),
+          totalAmount: outstandingBalance
+            .plus(interestAmount)
+            .toFixed(MONEY_DECIMALS),
           status: InstallmentStatus.PENDING,
         });
-        for (let surplusIndex = index + 1; surplusIndex < context.pendingInstallments.length; surplusIndex++) {
-          recalculated.push(cancelInPlace(context.pendingInstallments[surplusIndex]));
+        for (
+          let surplusIndex = index + 1;
+          surplusIndex < context.pendingInstallments.length;
+          surplusIndex++
+        ) {
+          recalculated.push(
+            cancelInPlace(context.pendingInstallments[surplusIndex]),
+          );
         }
         outstandingBalance = new Decimal('0.00');
         break;
       }
-      const interestAmount = outstandingBalance.mul(monthlyRate).toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
+      const interestAmount = outstandingBalance
+        .mul(monthlyRate)
+        .toDecimalPlaces(MONEY_DECIMALS, HALF_UP_ROUNDING);
       const principalAmount = installmentAmount.minus(interestAmount);
       recalculated.push({
         id: context.pendingInstallments[index].id,
@@ -70,7 +90,9 @@ export class ReduceTermRecalculationStrategy implements InstallmentRecalculation
  * Marks a surplus pending line as cancelled in place (rows are never deleted). The
  * original total is preserved so the row keeps a positive amount under the DB CHECKs.
  */
-function cancelInPlace(pendingInstallment: PendingInstallment): RecalculatedInstallment {
+function cancelInPlace(
+  pendingInstallment: PendingInstallment,
+): RecalculatedInstallment {
   return {
     id: pendingInstallment.id,
     principalAmount: pendingInstallment.totalAmount,

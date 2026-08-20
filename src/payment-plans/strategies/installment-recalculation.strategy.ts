@@ -29,5 +29,7 @@ export interface InstallmentRecalculationContext {
 
 export interface InstallmentRecalculationStrategy {
   readonly mode: AmortizationMode;
-  recalculate(context: InstallmentRecalculationContext): RecalculatedInstallment[];
+  recalculate(
+    context: InstallmentRecalculationContext,
+  ): RecalculatedInstallment[];
 }

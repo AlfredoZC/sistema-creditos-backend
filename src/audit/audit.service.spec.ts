@@ -108,9 +108,7 @@ describe('AuditService contract (design section 5.12)', () => {
       return rows[0].id;
     }
 
-    async function auditRowsByMarker(
-      marker: string,
-    ): Promise<AuditRow[]> {
+    async function auditRowsByMarker(marker: string): Promise<AuditRow[]> {
       return dataSource.query(
         `SELECT user_id, action, table_name, record_id, previous_data, new_data
          FROM audit_logs

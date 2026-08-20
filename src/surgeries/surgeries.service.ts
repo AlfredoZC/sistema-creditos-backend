@@ -189,7 +189,9 @@ export class SurgeriesService {
   ): Promise<SurgeryDoctor> {
     try {
       return await this.dataSource.transaction(async (manager) => {
-        const surgery = await manager.findOne(Surgery, { where: { id: surgeryId } });
+        const surgery = await manager.findOne(Surgery, {
+          where: { id: surgeryId },
+        });
         if (!surgery) throw new NotFoundException('Surgery not found');
         const doctor = await manager.findOne(Doctor, {
           where: { id: reassignPrincipalDto.doctorId },

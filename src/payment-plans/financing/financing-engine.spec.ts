@@ -4,7 +4,10 @@ import { ScheduleLine } from './schedule-line';
 
 const engine = new FinancingEngine();
 
-function sumAmounts(lines: ScheduleLine[], amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount'): string {
+function sumAmounts(
+  lines: ScheduleLine[],
+  amountKey: 'principalAmount' | 'interestAmount' | 'totalAmount',
+): string {
   return lines
     .reduce((total, line) => total.plus(line[amountKey]), new Decimal('0.00'))
     .toFixed(2);
@@ -33,13 +36,25 @@ describe('FinancingEngine.computeInstallment (design section 6.2 — A = P*i/(1-
 });
 
 describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2)', () => {
-  const startDate = (isoDate: string): Date => new Date(`${isoDate}T00:00:00.000Z`);
+  const startDate = (isoDate: string): Date =>
+    new Date(`${isoDate}T00:00:00.000Z`);
 
   it('reproduces the pinned base plan reference schedule exactly (spec: reference schedule)', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('10000.00', '2.00', 10, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '10000.00',
+      '2.00',
+      10,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(10);
-    expect(lines.map((line) => [line.principalAmount, line.interestAmount, line.totalAmount])).toEqual([
+    expect(
+      lines.map((line) => [
+        line.principalAmount,
+        line.interestAmount,
+        line.totalAmount,
+      ]),
+    ).toEqual([
       ['913.27', '200.00', '1113.27'],
       ['931.54', '181.73', '1113.27'],
       ['950.17', '163.10', '1113.27'],
@@ -51,11 +66,18 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
       ['1070.04', '43.23', '1113.27'],
       ['1091.39', '21.83', '1113.22'],
     ]);
-    expect(lines.every((line) => typeof line.totalAmount === 'string')).toBe(true);
+    expect(lines.every((line) => typeof line.totalAmount === 'string')).toBe(
+      true,
+    );
   });
 
   it('sums the base plan exactly to 11,132.65 with 10,000.00 principal and 1,132.65 interest (spec: rounding remainder absorbed)', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('10000.00', '2.00', 10, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '10000.00',
+      '2.00',
+      10,
+      startDate('2026-01-15'),
+    );
 
     expect(sumAmounts(lines, 'principalAmount')).toBe('10000.00');
     expect(sumAmounts(lines, 'interestAmount')).toBe('1132.65');
@@ -63,7 +85,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('emits a single zero-interest line for an upfront plan (spec: upfront plan schedule)', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('7000.00', '0.00', 1, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '7000.00',
+      '0.00',
+      1,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
@@ -75,7 +102,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('reproduces the pinned Option A recalculation schedule (703.73 x7, last line 703.76 absorbs the remainder)', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('5155.19', '2.00', 8, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '5155.19',
+      '2.00',
+      8,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(8);
     expect(lines.slice(0, 7).map((line) => line.totalAmount)).toEqual([
@@ -97,7 +129,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('produces equal zero-interest lines with no remainder for a divisible principal', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('1200.00', '0.00', 12, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '1200.00',
+      '0.00',
+      12,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(12);
     expect(lines.every((line) => line.principalAmount === '100.00')).toBe(true);
@@ -106,7 +143,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('clamps end-of-month due dates to the target month last day (spec: end-of-month clamping)', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('10000.00', '2.00', 4, startDate('2026-01-31'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '10000.00',
+      '2.00',
+      4,
+      startDate('2026-01-31'),
+    );
 
     expect(lines[0].dueDate.toISOString()).toBe('2026-02-28T00:00:00.000Z');
     expect(lines[1].dueDate.toISOString()).toBe('2026-03-31T00:00:00.000Z');
@@ -114,14 +156,24 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('clamps against leap-year February', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('10000.00', '2.00', 3, startDate('2024-01-31'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '10000.00',
+      '2.00',
+      3,
+      startDate('2024-01-31'),
+    );
 
     expect(lines[0].dueDate.toISOString()).toBe('2024-02-29T00:00:00.000Z');
     expect(lines[1].dueDate.toISOString()).toBe('2024-03-31T00:00:00.000Z');
   });
 
   it('rolls due dates over year boundaries', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('10000.00', '2.00', 3, startDate('2026-11-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '10000.00',
+      '2.00',
+      3,
+      startDate('2026-11-15'),
+    );
 
     expect(lines[0].dueDate.toISOString()).toBe('2026-12-15T00:00:00.000Z');
     expect(lines[1].dueDate.toISOString()).toBe('2027-01-15T00:00:00.000Z');
@@ -129,7 +181,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('absorbs the rounding remainder exactly for a large principal over many lines', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('999999.99', '2.00', 24, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '999999.99',
+      '2.00',
+      24,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(24);
     expect(sumAmounts(lines, 'principalAmount')).toBe('999999.99');
@@ -141,7 +198,12 @@ describe('FinancingEngine.generateFrenchAmortizationSchedule (design section 6.2
   });
 
   it('keeps small principals fully amortized to the last line with 2-decimal amounts', () => {
-    const lines = engine.generateFrenchAmortizationSchedule('1.00', '2.00', 12, startDate('2026-01-15'));
+    const lines = engine.generateFrenchAmortizationSchedule(
+      '1.00',
+      '2.00',
+      12,
+      startDate('2026-01-15'),
+    );
 
     expect(lines).toHaveLength(12);
     expect(lines[0]).toMatchObject({

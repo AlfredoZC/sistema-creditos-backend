@@ -101,7 +101,12 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       `INSERT INTO patients (identity_document, first_name, paternal_last_name, phone)
        VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [uniqueDocument(), 'Maria', 'Gomez', `+51${RUN_SUFFIX}${uniqueCounter++}`],
+      [
+        uniqueDocument(),
+        'Maria',
+        'Gomez',
+        `+51${RUN_SUFFIX}${uniqueCounter++}`,
+      ],
     );
     return rows[0].id;
   }
@@ -118,7 +123,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
         baseCost: '8000.00',
       });
     expect(response.status).toBe(201);
-    return { id: response.body.id as string, baseCost: response.body.baseCost as string };
+    return {
+      id: response.body.id as string,
+      baseCost: response.body.baseCost as string,
+    };
   }
 
   async function createDoctorRaw(): Promise<string> {
@@ -134,7 +142,12 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       `INSERT INTO doctors (user_id, specialty, professional_license, phone)
        VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [userId, 'Cardiology', uniqueLicense(), `+59171${RUN_SUFFIX}${uniqueCounter++}`],
+      [
+        userId,
+        'Cardiology',
+        uniqueLicense(),
+        `+59171${RUN_SUFFIX}${uniqueCounter++}`,
+      ],
     );
     return rows[0].id;
   }
@@ -159,28 +172,44 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       .send(body);
   }
 
-  function updateSurgery(token: string, id: string, body: Record<string, unknown>) {
+  function updateSurgery(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/surgeries/${id}`)
       .set('Authorization', `Bearer ${token}`)
       .send(body);
   }
 
-  function updateSurgeryStatus(token: string, id: string, body: Record<string, unknown>) {
+  function updateSurgeryStatus(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/surgeries/${id}/status`)
       .set('Authorization', `Bearer ${token}`)
       .send(body);
   }
 
-  function assignDoctor(token: string, id: string, body: Record<string, unknown>) {
+  function assignDoctor(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .post(`/api/surgeries/${id}/doctors`)
       .set('Authorization', `Bearer ${token}`)
       .send(body);
   }
 
-  function reassignPrincipal(token: string, id: string, body: Record<string, unknown>) {
+  function reassignPrincipal(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .post(`/api/surgeries/${id}/doctors/reassign-principal`)
       .set('Authorization', `Bearer ${token}`)
@@ -234,7 +263,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
     return Number(rows[0].count);
   }
 
-  async function roleOf(surgeryId: string, doctorId: string): Promise<string | null> {
+  async function roleOf(
+    surgeryId: string,
+    doctorId: string,
+  ): Promise<string | null> {
     const rows: { role: string }[] = await dataSource.query(
       `SELECT role FROM surgery_doctors WHERE surgery_id = $1 AND doctor_id = $2`,
       [surgeryId, doctorId],
@@ -242,7 +274,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
     return rows.length === 0 ? null : rows[0].role;
   }
 
-  async function assignmentCount(surgeryId: string, doctorId: string): Promise<number> {
+  async function assignmentCount(
+    surgeryId: string,
+    doctorId: string,
+  ): Promise<number> {
     const rows: { count: string }[] = await dataSource.query(
       `SELECT COUNT(*)::text AS count FROM surgery_doctors
        WHERE surgery_id = $1 AND doctor_id = $2`,
@@ -297,7 +332,9 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
 
       const response = await createSurgery(
         office.token,
-        surgeryBody(patientId, catalog.id, { notes: 'Requires general anesthesia' }),
+        surgeryBody(patientId, catalog.id, {
+          notes: 'Requires general anesthesia',
+        }),
       );
 
       expect(response.status).toBe(201);
@@ -345,7 +382,9 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
     });
 
     it('rejects unauthenticated requests with 401', async () => {
-      const response = await request(app.getHttpServer()).post('/api/surgeries');
+      const response = await request(app.getHttpServer()).post(
+        '/api/surgeries',
+      );
       expect(response.status).toBe(401);
     });
   });
@@ -355,13 +394,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
 
-      const response = await updateSurgery(office.token, created.body.id as string, {
-        notes: 'Postponed by one week',
-        scheduledDate: '2026-08-22',
-      });
+      const response = await updateSurgery(
+        office.token,
+        created.body.id as string,
+        {
+          notes: 'Postponed by one week',
+          scheduledDate: '2026-08-22',
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.notes).toBe('Postponed by one week');
@@ -374,12 +420,19 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
 
-      const response = await updateSurgery(office.token, created.body.id as string, {
-        totalCost: '6900.00',
-      });
+      const response = await updateSurgery(
+        office.token,
+        created.body.id as string,
+        {
+          totalCost: '6900.00',
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.totalCost).toBe('6900.00');
@@ -391,7 +444,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       await dataSource.query(
         `INSERT INTO payment_plans (surgery_id, type, financed_amount, installment_count, start_date, outstanding_balance)
@@ -399,9 +455,13 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
         [created.body.id as string, '8000.00'],
       );
 
-      const response = await updateSurgery(office.token, created.body.id as string, {
-        totalCost: '6000.00',
-      });
+      const response = await updateSurgery(
+        office.token,
+        created.body.id as string,
+        {
+          totalCost: '6000.00',
+        },
+      );
 
       expect(response.status).toBe(409);
       const row = await surgeryRow(created.body.id as string);
@@ -412,7 +472,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const patient = await patientToken();
 
@@ -429,12 +492,19 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
 
-      const response = await updateSurgeryStatus(office.token, created.body.id as string, {
-        status: SurgeryStatus.PERFORMED,
-      });
+      const response = await updateSurgeryStatus(
+        office.token,
+        created.body.id as string,
+        {
+          status: SurgeryStatus.PERFORMED,
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe(SurgeryStatus.PERFORMED);
@@ -447,7 +517,9 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       expect(audit[0].action).toBe('surgery.status_changed');
       expect(audit[0].table_name).toBe('surgeries');
       expect(audit[0].record_id).toBe(created.body.id);
-      expect(audit[0].previous_data).toEqual({ status: SurgeryStatus.SCHEDULED });
+      expect(audit[0].previous_data).toEqual({
+        status: SurgeryStatus.SCHEDULED,
+      });
       expect(audit[0].new_data).toEqual({ status: SurgeryStatus.PERFORMED });
     });
 
@@ -456,21 +528,34 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const admin = await adminToken();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
-      const performed = await updateSurgeryStatus(office.token, created.body.id as string, {
-        status: SurgeryStatus.PERFORMED,
-      });
+      const performed = await updateSurgeryStatus(
+        office.token,
+        created.body.id as string,
+        {
+          status: SurgeryStatus.PERFORMED,
+        },
+      );
       expect(performed.status).toBe(200);
 
-      const response = await updateSurgeryStatus(admin, created.body.id as string, {
-        status: SurgeryStatus.CANCELLED,
-      });
+      const response = await updateSurgeryStatus(
+        admin,
+        created.body.id as string,
+        {
+          status: SurgeryStatus.CANCELLED,
+        },
+      );
 
       expect(response.status).toBe(200);
       const audit = await auditRows(created.body.id as string);
       expect(audit).toHaveLength(2);
-      expect(audit[1].previous_data).toEqual({ status: SurgeryStatus.PERFORMED });
+      expect(audit[1].previous_data).toEqual({
+        status: SurgeryStatus.PERFORMED,
+      });
       expect(audit[1].new_data).toEqual({ status: SurgeryStatus.CANCELLED });
     });
 
@@ -478,12 +563,19 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
 
-      const response = await updateSurgeryStatus(office.token, created.body.id as string, {
-        status: 'completed',
-      });
+      const response = await updateSurgeryStatus(
+        office.token,
+        created.body.id as string,
+        {
+          status: 'completed',
+        },
+      );
 
       expect(response.status).toBe(400);
       const row = await surgeryRow(created.body.id as string);
@@ -495,9 +587,13 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
     it('returns 404 for an unknown surgery', async () => {
       const office = await officeUser();
 
-      const response = await updateSurgeryStatus(office.token, '00000000-0000-4000-8000-000000000000', {
-        status: SurgeryStatus.PERFORMED,
-      });
+      const response = await updateSurgeryStatus(
+        office.token,
+        '00000000-0000-4000-8000-000000000000',
+        {
+          status: SurgeryStatus.PERFORMED,
+        },
+      );
 
       expect(response.status).toBe(404);
     });
@@ -506,13 +602,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const patient = await patientToken();
 
-      const response = await updateSurgeryStatus(patient, created.body.id as string, {
-        status: SurgeryStatus.PERFORMED,
-      });
+      const response = await updateSurgeryStatus(
+        patient,
+        created.body.id as string,
+        {
+          status: SurgeryStatus.PERFORMED,
+        },
+      );
 
       expect(response.status).toBe(403);
     });
@@ -523,14 +626,21 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
 
-      const response = await assignDoctor(office.token, created.body.id as string, {
-        doctorId,
-        role: SurgeryDoctorRole.ASSISTANT,
-      });
+      const response = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+          role: SurgeryDoctorRole.ASSISTANT,
+        },
+      );
 
       expect(response.status).toBe(201);
       expect(response.body.doctorId).toBe(doctorId);
@@ -544,13 +654,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
 
-      const response = await assignDoctor(office.token, created.body.id as string, {
-        doctorId,
-      });
+      const response = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+        },
+      );
 
       expect(response.status).toBe(201);
       expect(response.body.role).toBe(SurgeryDoctorRole.PRINCIPAL);
@@ -561,20 +678,31 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
       const secondDoctorId = await createDoctorRaw();
-      const first = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: firstDoctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const first = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: firstDoctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
       expect(first.status).toBe(201);
 
-      const response = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: secondDoctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const response = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: secondDoctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
 
       expect(response.status).toBe(409);
       expect(await principalCount(created.body.id as string)).toBe(1);
@@ -587,22 +715,35 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
-      const first = await assignDoctor(office.token, created.body.id as string, {
-        doctorId,
-        role: SurgeryDoctorRole.ANESTHESIOLOGIST,
-      });
+      const first = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+          role: SurgeryDoctorRole.ANESTHESIOLOGIST,
+        },
+      );
       expect(first.status).toBe(201);
 
-      const response = await assignDoctor(office.token, created.body.id as string, {
-        doctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const response = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
 
       expect(response.status).toBe(409);
-      expect(await assignmentCount(created.body.id as string, doctorId)).toBe(1);
+      expect(await assignmentCount(created.body.id as string, doctorId)).toBe(
+        1,
+      );
       expect(await roleOf(created.body.id as string, doctorId)).toBe(
         SurgeryDoctorRole.ANESTHESIOLOGIST,
       );
@@ -612,13 +753,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
 
-      const response = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: '00000000-0000-4000-8000-000000000000',
-        role: SurgeryDoctorRole.ASSISTANT,
-      });
+      const response = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: '00000000-0000-4000-8000-000000000000',
+          role: SurgeryDoctorRole.ASSISTANT,
+        },
+      );
 
       expect(response.status).toBe(404);
     });
@@ -627,10 +775,14 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const doctorId = await createDoctorRaw();
 
-      const response = await assignDoctor(office.token, '00000000-0000-4000-8000-000000000000', {
-        doctorId,
-        role: SurgeryDoctorRole.ASSISTANT,
-      });
+      const response = await assignDoctor(
+        office.token,
+        '00000000-0000-4000-8000-000000000000',
+        {
+          doctorId,
+          role: SurgeryDoctorRole.ASSISTANT,
+        },
+      );
 
       expect(response.status).toBe(404);
     });
@@ -639,7 +791,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
       const patient = await patientToken();
@@ -656,7 +811,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
       const secondDoctorId = await createDoctorRaw();
@@ -681,19 +839,30 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
       const secondDoctorId = await createDoctorRaw();
-      const first = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: firstDoctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const first = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: firstDoctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
       expect(first.status).toBe(201);
 
-      const response = await reassignPrincipal(office.token, created.body.id as string, {
-        doctorId: secondDoctorId,
-      });
+      const response = await reassignPrincipal(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: secondDoctorId,
+        },
+      );
 
       expect(response.status).toBe(201);
       expect(response.body.doctorId).toBe(secondDoctorId);
@@ -712,7 +881,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
       const secondDoctorId = await createDoctorRaw();
@@ -725,9 +897,13 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
         role: SurgeryDoctorRole.ASSISTANT,
       });
 
-      const response = await reassignPrincipal(office.token, created.body.id as string, {
-        doctorId: secondDoctorId,
-      });
+      const response = await reassignPrincipal(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: secondDoctorId,
+        },
+      );
 
       expect(response.status).toBe(201);
       expect(await principalCount(created.body.id as string)).toBe(1);
@@ -737,25 +913,38 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       expect(await roleOf(created.body.id as string, firstDoctorId)).toBe(
         SurgeryDoctorRole.ASSISTANT,
       );
-      expect(await assignmentCount(created.body.id as string, secondDoctorId)).toBe(1);
+      expect(
+        await assignmentCount(created.body.id as string, secondDoctorId),
+      ).toBe(1);
     });
 
     it('rolls back the demotion when the target doctor does not exist (atomicity)', async () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
-      const first = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: firstDoctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const first = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: firstDoctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
       expect(first.status).toBe(201);
 
-      const response = await reassignPrincipal(office.token, created.body.id as string, {
-        doctorId: '00000000-0000-4000-8000-000000000000',
-      });
+      const response = await reassignPrincipal(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: '00000000-0000-4000-8000-000000000000',
+        },
+      );
 
       expect(response.status).toBe(404);
       // The transaction rolled back: D1 is still principal, no partial demote.
@@ -769,18 +958,29 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const firstDoctorId = await createDoctorRaw();
-      const first = await assignDoctor(office.token, created.body.id as string, {
-        doctorId: firstDoctorId,
-        role: SurgeryDoctorRole.PRINCIPAL,
-      });
+      const first = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: firstDoctorId,
+          role: SurgeryDoctorRole.PRINCIPAL,
+        },
+      );
       expect(first.status).toBe(201);
 
-      const response = await reassignPrincipal(office.token, created.body.id as string, {
-        doctorId: firstDoctorId,
-      });
+      const response = await reassignPrincipal(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId: firstDoctorId,
+        },
+      );
 
       expect(response.status).toBe(409);
       expect(await principalCount(created.body.id as string)).toBe(1);
@@ -793,13 +993,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
 
-      const response = await reassignPrincipal(office.token, created.body.id as string, {
-        doctorId,
-      });
+      const response = await reassignPrincipal(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+        },
+      );
 
       expect(response.status).toBe(201);
       expect(await principalCount(created.body.id as string)).toBe(1);
@@ -812,14 +1019,21 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const office = await officeUser();
       const patientId = await createPatientRaw();
       const catalog = await createCatalogEntry(office.token);
-      const created = await createSurgery(office.token, surgeryBody(patientId, catalog.id));
+      const created = await createSurgery(
+        office.token,
+        surgeryBody(patientId, catalog.id),
+      );
       expect(created.status).toBe(201);
       const doctorId = await createDoctorRaw();
       const patient = await patientToken();
 
-      const response = await reassignPrincipal(patient, created.body.id as string, {
-        doctorId,
-      });
+      const response = await reassignPrincipal(
+        patient,
+        created.body.id as string,
+        {
+          doctorId,
+        },
+      );
 
       expect(response.status).toBe(403);
     });
@@ -845,13 +1059,20 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
         surgeryBody(patientId, catalog.id, { scheduledDate: '2999-01-05' }),
       );
       expect(created.status).toBe(201);
-      const assigned = await assignDoctor(office.token, created.body.id as string, {
-        doctorId,
-        role: SurgeryDoctorRole.ASSISTANT,
-      });
+      const assigned = await assignDoctor(
+        office.token,
+        created.body.id as string,
+        {
+          doctorId,
+          role: SurgeryDoctorRole.ASSISTANT,
+        },
+      );
       expect(assigned.status).toBe(201);
 
-      const response = await listSurgeries(office.token, { limit: 100, offset: 0 });
+      const response = await listSurgeries(office.token, {
+        limit: 100,
+        offset: 0,
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.data).toBeInstanceOf(Array);
@@ -887,7 +1108,10 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       );
       expect(earlier.status).toBe(201);
 
-      const response = await listSurgeries(office.token, { limit: 100, offset: 0 });
+      const response = await listSurgeries(office.token, {
+        limit: 100,
+        offset: 0,
+      });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map(
@@ -911,13 +1135,17 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       expect(heavy.status).toBe(201);
       for (let i = 0; i < 3; i++) {
         const doctorId = await createDoctorRaw();
-        const assigned = await assignDoctor(office.token, heavy.body.id as string, {
-          doctorId,
-          role:
-            i === 0
-              ? SurgeryDoctorRole.PRINCIPAL
-              : SurgeryDoctorRole.ASSISTANT,
-        });
+        const assigned = await assignDoctor(
+          office.token,
+          heavy.body.id as string,
+          {
+            doctorId,
+            role:
+              i === 0
+                ? SurgeryDoctorRole.PRINCIPAL
+                : SurgeryDoctorRole.ASSISTANT,
+          },
+        );
         expect(assigned.status).toBe(201);
       }
       const light = await createSurgery(
@@ -942,7 +1170,9 @@ describe('surgeries API (design sections 5.6, 5.7 and 8.1-T6/T7)', () => {
       const paged: string[] = [];
       let page: { data: { id: string }[]; total: number };
       do {
-        page = (await listSurgeries(office.token, { limit: 10, offset: paged.length })).body;
+        page = (
+          await listSurgeries(office.token, { limit: 10, offset: paged.length })
+        ).body;
         expect(page.total).toBe(Number(dbCount[0].count));
         for (const row of page.data) paged.push(row.id);
       } while (paged.length < page.total);

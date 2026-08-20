@@ -27,7 +27,11 @@ export class WhatsAppDispatch {
   templateId: string;
 
   @ApiProperty({ enum: DispatchStatus, default: DispatchStatus.QUEUED })
-  @Column({ type: 'enum', enum: DispatchStatus, default: DispatchStatus.QUEUED })
+  @Column({
+    type: 'enum',
+    enum: DispatchStatus,
+    default: DispatchStatus.QUEUED,
+  })
   status: DispatchStatus;
 
   @ApiProperty({ default: 0 })
@@ -35,7 +39,11 @@ export class WhatsAppDispatch {
   sendAttempts: number;
 
   @ApiProperty({ nullable: true })
-  @Column('varchar', { length: 255, name: 'provider_message_id', nullable: true })
+  @Column('varchar', {
+    length: 255,
+    name: 'provider_message_id',
+    nullable: true,
+  })
   providerMessageId: string | null;
 
   @ApiProperty({ nullable: true })

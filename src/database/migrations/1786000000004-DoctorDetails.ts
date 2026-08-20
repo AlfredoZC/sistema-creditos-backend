@@ -49,8 +49,12 @@ export class DoctorDetails1786000000004 implements MigrationInterface {
       `ALTER TABLE "doctors" DROP CONSTRAINT "uq_doctors_phone"`,
     );
     await queryRunner.query(`ALTER TABLE "doctors" DROP COLUMN "phone"`);
-    await queryRunner.query(`ALTER TABLE "doctors" DROP COLUMN "maternal_last_name"`);
-    await queryRunner.query(`ALTER TABLE "doctors" DROP COLUMN "paternal_last_name"`);
+    await queryRunner.query(
+      `ALTER TABLE "doctors" DROP COLUMN "maternal_last_name"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "doctors" DROP COLUMN "paternal_last_name"`,
+    );
     await queryRunner.query(`ALTER TABLE "doctors" DROP COLUMN "first_name"`);
   }
 }

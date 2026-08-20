@@ -44,9 +44,9 @@ describe('phone normalizer (patient-management spec — Canonical Phone Format)'
     });
 
     it('normalizes both sides equally (idempotent comparison)', () => {
-      expect(
-        phoneMatchesLeftNormalized('+59170000001', '+591 7000-0001'),
-      ).toBe(true);
+      expect(phoneMatchesLeftNormalized('+59170000001', '+591 7000-0001')).toBe(
+        true,
+      );
     });
   });
 });

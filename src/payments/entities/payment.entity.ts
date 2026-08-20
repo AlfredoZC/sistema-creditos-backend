@@ -1,10 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AmortizationMode } from '../../common/enums';
 import { decimalTransformer } from '../../common/transformers';
-import {
-  PaymentStatus,
-  PaymentType,
-} from '../../common/enums';
+import { PaymentStatus, PaymentType } from '../../common/enums';
 import {
   Column,
   Entity,
@@ -87,7 +84,10 @@ export class Payment {
   @Column('text', { name: 'receipt_url', nullable: true })
   receiptUrl: string | null;
 
-  @ApiProperty({ enum: PaymentStatus, default: PaymentStatus.PENDING_CONFIRMATION })
+  @ApiProperty({
+    enum: PaymentStatus,
+    default: PaymentStatus.PENDING_CONFIRMATION,
+  })
   @Column({
     type: 'enum',
     enum: PaymentStatus,

@@ -13,7 +13,6 @@ import {
   SeedPatient,
   SeedPayment,
   SeedPaymentPlan,
-  SeedProfile,
   SeedSurgery,
   SeedSurgeryCatalog,
   SeedSurgeryDoctor,
@@ -140,19 +139,17 @@ export class SeedService {
         'address',
         'phone',
       ],
-      initialData.patients.map(
-        (p: SeedPatient): Record<string, unknown> => ({
-          id: p.id,
-          user_id: p.userId,
-          identity_document: p.identityDocument,
-          first_name: p.firstName,
-          paternal_last_name: p.paternalLastName,
-          maternal_last_name: p.maternalLastName,
-          birth_date: p.birthDate,
-          address: p.address,
-          phone: p.phone,
-        }),
-      ),
+      initialData.patients.map((p: SeedPatient): Record<string, unknown> => ({
+        id: p.id,
+        user_id: p.userId,
+        identity_document: p.identityDocument,
+        first_name: p.firstName,
+        paternal_last_name: p.paternalLastName,
+        maternal_last_name: p.maternalLastName,
+        birth_date: p.birthDate,
+        address: p.address,
+        phone: p.phone,
+      })),
     );
   }
 
@@ -169,18 +166,16 @@ export class SeedService {
         'maternal_last_name',
         'phone',
       ],
-      initialData.doctors.map(
-        (d: SeedDoctor): Record<string, unknown> => ({
-          id: d.id,
-          user_id: d.userId,
-          specialty: d.specialty,
-          professional_license: d.professionalLicense,
-          first_name: d.firstName,
-          paternal_last_name: d.paternalLastName,
-          maternal_last_name: d.maternalLastName,
-          phone: d.phone,
-        }),
-      ),
+      initialData.doctors.map((d: SeedDoctor): Record<string, unknown> => ({
+        id: d.id,
+        user_id: d.userId,
+        specialty: d.specialty,
+        professional_license: d.professionalLicense,
+        first_name: d.firstName,
+        paternal_last_name: d.paternalLastName,
+        maternal_last_name: d.maternalLastName,
+        phone: d.phone,
+      })),
     );
   }
 
@@ -202,18 +197,24 @@ export class SeedService {
   private async insertSurgeries(): Promise<void> {
     await this.insertRows(
       'surgeries',
-      ['id', 'patient_id', 'surgery_catalog_id', 'scheduled_date', 'total_cost', 'status', 'notes'],
-      initialData.surgeries.map(
-        (s: SeedSurgery): Record<string, unknown> => ({
-          id: s.id,
-          patient_id: s.patientId,
-          surgery_catalog_id: s.surgeryCatalogId,
-          scheduled_date: s.scheduledDate,
-          total_cost: s.totalCost,
-          status: s.status,
-          notes: s.notes,
-        }),
-      ),
+      [
+        'id',
+        'patient_id',
+        'surgery_catalog_id',
+        'scheduled_date',
+        'total_cost',
+        'status',
+        'notes',
+      ],
+      initialData.surgeries.map((s: SeedSurgery): Record<string, unknown> => ({
+        id: s.id,
+        patient_id: s.patientId,
+        surgery_catalog_id: s.surgeryCatalogId,
+        scheduled_date: s.scheduledDate,
+        total_cost: s.totalCost,
+        status: s.status,
+        notes: s.notes,
+      })),
     );
   }
 
@@ -312,28 +313,32 @@ export class SeedService {
     return new Map(rows.map((row) => [row.name, row.id]));
   }
 
-  private async insertPayments(paymentMethods: Map<string, string>): Promise<void> {
-    const rows = initialData.payments.map((p: SeedPayment): Record<string, unknown> => {
-      const methodId = paymentMethods.get(p.paymentMethod);
-      if (!methodId) {
-        throw new Error(
-          `Seed payment references unknown payment method '${p.paymentMethod}'`,
-        );
-      }
-      return {
-        id: p.id,
-        payment_plan_id: p.paymentPlanId,
-        installment_id: p.installmentId,
-        patient_user_id: p.patientUserId,
-        recorded_by_user_id: p.recordedByUserId,
-        payment_method_id: methodId,
-        amount: p.amount,
-        type: p.type,
-        amortization_mode: p.amortizationMode,
-        paid_at: p.paidAt,
-        status: p.status,
-      };
-    });
+  private async insertPayments(
+    paymentMethods: Map<string, string>,
+  ): Promise<void> {
+    const rows = initialData.payments.map(
+      (p: SeedPayment): Record<string, unknown> => {
+        const methodId = paymentMethods.get(p.paymentMethod);
+        if (!methodId) {
+          throw new Error(
+            `Seed payment references unknown payment method '${p.paymentMethod}'`,
+          );
+        }
+        return {
+          id: p.id,
+          payment_plan_id: p.paymentPlanId,
+          installment_id: p.installmentId,
+          patient_user_id: p.patientUserId,
+          recorded_by_user_id: p.recordedByUserId,
+          payment_method_id: methodId,
+          amount: p.amount,
+          type: p.type,
+          amortization_mode: p.amortizationMode,
+          paid_at: p.paidAt,
+          status: p.status,
+        };
+      },
+    );
 
     await this.insertRows(
       'payments',
@@ -357,21 +362,26 @@ export class SeedService {
   private async insertAuditLogs(): Promise<void> {
     await this.insertRows(
       'audit_logs',
-      ['id', 'user_id', 'action', 'table_name', 'record_id', 'previous_data', 'new_data', 'created_at'],
-      initialData.auditLogs.map(
-        (a: SeedAuditLog): Record<string, unknown> => ({
-          id: a.id,
-          user_id: a.userId,
-          action: a.action,
-          table_name: a.tableName,
-          record_id: a.recordId,
-          previous_data: a.previousData
-            ? JSON.stringify(a.previousData)
-            : null,
-          new_data: a.newData ? JSON.stringify(a.newData) : null,
-          created_at: a.createdAt,
-        }),
-      ),
+      [
+        'id',
+        'user_id',
+        'action',
+        'table_name',
+        'record_id',
+        'previous_data',
+        'new_data',
+        'created_at',
+      ],
+      initialData.auditLogs.map((a: SeedAuditLog): Record<string, unknown> => ({
+        id: a.id,
+        user_id: a.userId,
+        action: a.action,
+        table_name: a.tableName,
+        record_id: a.recordId,
+        previous_data: a.previousData ? JSON.stringify(a.previousData) : null,
+        new_data: a.newData ? JSON.stringify(a.newData) : null,
+        created_at: a.createdAt,
+      })),
     );
   }
 
@@ -526,7 +536,10 @@ export class SeedService {
       .map(
         (_, index) =>
           `(${columns
-            .map((__, columnIndex) => `$${index * columns.length + columnIndex + 1}`)
+            .map(
+              (__, columnIndex) =>
+                `$${index * columns.length + columnIndex + 1}`,
+            )
             .join(', ')})`,
       )
       .join(', ');

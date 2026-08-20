@@ -12,11 +12,7 @@ import {
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
-import {
-  TemplateCategory,
-  TemplateStatus,
-  UserRole,
-} from '../common/enums';
+import { TemplateCategory, TemplateStatus, UserRole } from '../common/enums';
 import { CreateTemplateDto, UpdateTemplateDto } from './dto';
 import { TemplatesService } from './templates/templates.service';
 
@@ -39,10 +35,7 @@ export class TemplatesController {
     status: 409,
     description: 'Duplicate template name+language',
   })
-  create(
-    @Body() createTemplateDto: CreateTemplateDto,
-    @GetUser() user: User,
-  ) {
+  create(@Body() createTemplateDto: CreateTemplateDto, @GetUser() user: User) {
     return this.templatesService.create(createTemplateDto, user.id);
   }
 
@@ -83,10 +76,7 @@ export class TemplatesController {
   @Auth(UserRole.OFFICE, UserRole.ADMIN)
   @ApiResponse({ status: 200, description: 'Template deactivated' })
   @ApiResponse({ status: 404, description: 'Template not found' })
-  deactivate(
-    @Param('id', ParseUUIDPipe) id: string,
-    @GetUser() user: User,
-  ) {
+  deactivate(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.templatesService.deactivate(id, user.id);
   }
 }

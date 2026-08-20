@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: lint + build + tests
+    runs-on: ubuntu-latest
+
+    # Espejo del docker-compose de desarrollo. Las credenciales y el puerto
+    # coinciden con `.env.test` (commiteado), que es lo que jest carga via
+    # `setupFiles`; por eso el workflow no necesita ningun secret. La base
+    # `db_creditos_test` no se crea aca: `src/test-utils/setup-test-db.ts` la
+    # crea y le corre las migraciones pendientes en el primer spec.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: rootpassword
+          POSTGRES_DB: postgres
+        ports:
+          - 5439:5432
+        options: >-
+          --health-cmd "pg_isready -U root"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Verifica, no corrige: `npm run lint` lleva --fix y en CI mutar archivos
+      # esconderia los errores en vez de reportarlos.
+      - run: npm run lint:ci
+
+      - run: npm run build
+
+      # In-band a proposito: el bootstrap de la base de test toma un advisory
+      # lock, asi que los workers en paralelo se serializan igual pero con mas
+      # chance de flakes.
+      - run: npx jest --runInBand

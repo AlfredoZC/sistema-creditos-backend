@@ -78,21 +78,37 @@ describe('whatsapp-webhook-client (task 4.2 — signed test requests)', () => {
 
     const valid = computeHubSignature(PINNED_APP_SECRET, rawBody);
     expect(
-      service.verifyBodySignature(Buffer.from(rawBody, 'utf8'), valid, PINNED_APP_SECRET),
+      service.verifyBodySignature(
+        Buffer.from(rawBody, 'utf8'),
+        valid,
+        PINNED_APP_SECRET,
+      ),
     ).toBe(true);
 
     const tampered = computeHubSignature(PINNED_APP_SECRET, `${rawBody} `);
     expect(
-      service.verifyBodySignature(Buffer.from(`${rawBody} `, 'utf8'), tampered, PINNED_APP_SECRET),
+      service.verifyBodySignature(
+        Buffer.from(`${rawBody} `, 'utf8'),
+        tampered,
+        PINNED_APP_SECRET,
+      ),
     ).toBe(true);
     // The same signature over the ORIGINAL bytes must be rejected.
     expect(
-      service.verifyBodySignature(Buffer.from(rawBody, 'utf8'), tampered, PINNED_APP_SECRET),
+      service.verifyBodySignature(
+        Buffer.from(rawBody, 'utf8'),
+        tampered,
+        PINNED_APP_SECRET,
+      ),
     ).toBe(false);
 
     const wrongSecret = computeHubSignature('wrong-secret', rawBody);
     expect(
-      service.verifyBodySignature(Buffer.from(rawBody, 'utf8'), wrongSecret, PINNED_APP_SECRET),
+      service.verifyBodySignature(
+        Buffer.from(rawBody, 'utf8'),
+        wrongSecret,
+        PINNED_APP_SECRET,
+      ),
     ).toBe(false);
   });
 

@@ -112,9 +112,7 @@ export class PatientsService {
       currentUser.role === UserRole.PATIENT &&
       patient.userId !== currentUser.id
     ) {
-      throw new ForbiddenException(
-        'Patients can only access their own record',
-      );
+      throw new ForbiddenException('Patients can only access their own record');
     }
   }
 }

@@ -1,8 +1,4 @@
-import {
-  ExecutionContext,
-  InternalServerErrorException,
-  createParamDecorator,
-} from '@nestjs/common';
+import { ExecutionContext, createParamDecorator } from '@nestjs/common';
 
 export const RawHeaders = createParamDecorator(
   (data: string, ctx: ExecutionContext) => {

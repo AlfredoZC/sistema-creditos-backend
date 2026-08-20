@@ -119,7 +119,11 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       .set('Authorization', `Bearer ${token}`);
   }
 
-  function updatePatient(token: string, id: string, body: Record<string, unknown>) {
+  function updatePatient(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/patients/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -165,10 +169,11 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       expect(response.body.paternalLastName).toBe('Perez');
       expect(response.body.userId).toBeNull();
 
-      const rows: (IdRow & { userId: string | null })[] = await dataSource.query(
-        'SELECT id, user_id AS "userId" FROM patients WHERE phone = $1',
-        [response.body.phone as string],
-      );
+      const rows: (IdRow & { userId: string | null })[] =
+        await dataSource.query(
+          'SELECT id, user_id AS "userId" FROM patients WHERE phone = $1',
+          [response.body.phone as string],
+        );
       expect(rows).toHaveLength(1);
       expect(rows[0].userId).toBeNull();
 
@@ -205,7 +210,9 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
 
       const response = await createPatient(
         token,
-        patientBody({ identityDocument: first.body.identityDocument as string }),
+        patientBody({
+          identityDocument: first.body.identityDocument as string,
+        }),
       );
 
       expect(response.status).toBe(409);
@@ -257,7 +264,10 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       await linkUser(office, created.body.id as string, patientUserId);
       const patientToken = await tokenForUserId(patientUserId);
 
-      const response = await getPatient(patientToken, created.body.id as string);
+      const response = await getPatient(
+        patientToken,
+        created.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(created.body.id);
@@ -315,9 +325,13 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       await linkUser(office, own.body.id as string, patientUserId);
       const patientToken = await tokenForUserId(patientUserId);
 
-      const ownUpdate = await updatePatient(patientToken, own.body.id as string, {
-        address: 'Av. Siempre Viva 123',
-      });
+      const ownUpdate = await updatePatient(
+        patientToken,
+        own.body.id as string,
+        {
+          address: 'Av. Siempre Viva 123',
+        },
+      );
       expect(ownUpdate.status).toBe(200);
       expect(ownUpdate.body.address).toBe('Av. Siempre Viva 123');
 
@@ -335,11 +349,9 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       const first = await createPatient(token, patientBody());
       const second = await createPatient(token, patientBody());
 
-      const response = await updatePatient(
-        token,
-        second.body.id as string,
-        { phone: first.body.phone as string },
-      );
+      const response = await updatePatient(token, second.body.id as string, {
+        phone: first.body.phone as string,
+      });
 
       expect(response.status).toBe(409);
       const rows: IdRow[] = await dataSource.query(
@@ -463,7 +475,10 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       const token = await officeToken();
       const mobile = uniqueMobile8();
 
-      const response = await createPatient(token, patientBody({ phone: mobile }));
+      const response = await createPatient(
+        token,
+        patientBody({ phone: mobile }),
+      );
 
       expect(response.status).toBe(201);
       expect(response.body.phone).toBe(`+591${mobile}`);
@@ -477,7 +492,10 @@ describe('patients API (hybrid account model, design sections 5.3 and 8.1-T9)', 
       const mobile = uniqueMobile8();
       const input = `591${mobile}`;
 
-      const response = await createPatient(token, patientBody({ phone: input }));
+      const response = await createPatient(
+        token,
+        patientBody({ phone: input }),
+      );
 
       expect(response.status).toBe(201);
       expect(response.body.phone).toBe(`+591${mobile}`);

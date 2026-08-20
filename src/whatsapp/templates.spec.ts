@@ -2,11 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
 import { DataSource } from 'typeorm';
-import {
-  TemplateCategory,
-  TemplateStatus,
-  UserRole,
-} from '../common/enums';
+import { TemplateCategory, TemplateStatus, UserRole } from '../common/enums';
 import { ensureTestDbReady } from '../test-utils/setup-test-db';
 import { buildTestingApp } from '../test-utils/test-app';
 import { truncateAllTables } from '../test-utils/truncate';
@@ -181,7 +177,10 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
   /** Simulates the deferred submit-on-create persisting Meta's template id
    *  (see header DEFERRALS note): mirrorProviderStatus resolves templates by
    *  provider_template_id, which only the provider submission would set. */
-  async function setProviderTemplateId(id: string, providerTemplateId: string): Promise<void> {
+  async function setProviderTemplateId(
+    id: string,
+    providerTemplateId: string,
+  ): Promise<void> {
     await dataSource.query(
       `UPDATE message_templates SET provider_template_id = $1 WHERE id = $2`,
       [providerTemplateId, id],
@@ -207,7 +206,11 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
       .set('Authorization', `Bearer ${token}`);
   }
 
-  function patchTemplate(token: string, id: string, body: Record<string, unknown>) {
+  function patchTemplate(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/whatsapp/templates/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -438,9 +441,9 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
 
       const list = await listTemplates(officeToken);
       expect(list.status).toBe(200);
-      expect(
-        (list.body as { name: string }[]).map((t) => t.name),
-      ).toContain('crud_lifecycle');
+      expect((list.body as { name: string }[]).map((t) => t.name)).toContain(
+        'crud_lifecycle',
+      );
 
       const detail = await getTemplate(officeToken, created.body.id as string);
       expect(detail.status).toBe(200);
@@ -448,10 +451,14 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
       expect(detail.body.bodyTemplate).toBe(BODY_TWO_PLACEHOLDERS);
 
       // PATCH body + samples: updated audit carries only operational fields.
-      const updated = await patchTemplate(officeToken, created.body.id as string, {
-        body: 'Nueva plantilla {{1}}.',
-        sampleVariables: { '1': 'Cliente' },
-      });
+      const updated = await patchTemplate(
+        officeToken,
+        created.body.id as string,
+        {
+          body: 'Nueva plantilla {{1}}.',
+          sampleVariables: { '1': 'Cliente' },
+        },
+      );
       expect(updated.status).toBe(200);
       expect(updated.body.bodyTemplate).toBe('Nueva plantilla {{1}}.');
 
@@ -566,7 +573,11 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
 
       const cases: Record<string, unknown>[] = [
         // Missing {{2}}.
-        { patientId: patient.id, templateId: template.id, variables: { '1': 'Juan' } },
+        {
+          patientId: patient.id,
+          templateId: template.id,
+          variables: { '1': 'Juan' },
+        },
         // Extra variable beyond {{1}}..{{2}}.
         {
           patientId: patient.id,

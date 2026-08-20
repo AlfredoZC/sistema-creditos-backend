@@ -111,7 +111,11 @@ const EXPECTED_ENUM_VALUES: Record<string, string[]> = {
   payment_plan_type: ['upfront', 'credit'],
   payment_plan_status: ['active', 'completed', 'delinquent', 'cancelled'],
   installment_status: ['pending', 'partial', 'paid', 'overdue', 'cancelled'],
-  payment_type: ['down_payment', 'installment_payment', 'principal_amortization'],
+  payment_type: [
+    'down_payment',
+    'installment_payment',
+    'principal_amortization',
+  ],
   payment_status: ['pending_confirmation', 'confirmed', 'rejected'],
   amortization_mode: ['reduce_installment', 'reduce_term'],
 };
@@ -257,7 +261,9 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('creates all ten tables with their translated columns', async () => {
-    for (const [tableName, expectedColumns] of Object.entries(EXPECTED_TABLE_COLUMNS)) {
+    for (const [tableName, expectedColumns] of Object.entries(
+      EXPECTED_TABLE_COLUMNS,
+    )) {
       const rows: { column_name: string }[] = await dataSource.query(
         `SELECT column_name
            FROM information_schema.columns
@@ -270,7 +276,9 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('creates the eight enum types with design-ordered values', async () => {
-    for (const [typeName, expectedValues] of Object.entries(EXPECTED_ENUM_VALUES)) {
+    for (const [typeName, expectedValues] of Object.entries(
+      EXPECTED_ENUM_VALUES,
+    )) {
       const rows: { enumlabel: string }[] = await dataSource.query(
         `SELECT e.enumlabel
            FROM pg_type t
@@ -284,9 +292,10 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('seeds the four payment methods', async () => {
-    const rows: { name: string; is_enabled: boolean }[] = await dataSource.query(
-      `SELECT name, is_enabled FROM payment_methods ORDER BY name`,
-    );
+    const rows: { name: string; is_enabled: boolean }[] =
+      await dataSource.query(
+        `SELECT name, is_enabled FROM payment_methods ORDER BY name`,
+      );
     expect(rows).toEqual([
       { name: 'bank_transfer', is_enabled: true },
       { name: 'card', is_enabled: true },
@@ -296,7 +305,9 @@ describe('core modules migration (design sections 5 and 10)', () => {
   });
 
   it('creates the translated indexes and the one-principal partial unique index', async () => {
-    for (const [tableName, expectedIndexes] of Object.entries(EXPECTED_INDEXES)) {
+    for (const [tableName, expectedIndexes] of Object.entries(
+      EXPECTED_INDEXES,
+    )) {
       const rows: { indexname: string }[] = await dataSource.query(
         `SELECT indexname
            FROM pg_indexes

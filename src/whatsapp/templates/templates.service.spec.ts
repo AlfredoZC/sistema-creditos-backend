@@ -10,7 +10,6 @@ import { TemplateCategory, TemplateStatus } from '../../common/enums';
 import { ensureTestDbReady } from '../../test-utils/setup-test-db';
 import { buildTestingApp } from '../../test-utils/test-app';
 import { CreateTemplateDto, UpdateTemplateDto } from '../dto';
-import { MessageTemplate } from '../entities';
 import { TemplatesService } from './templates.service';
 
 jest.setTimeout(60000);
@@ -215,10 +214,7 @@ describe('TemplatesService (CRUD + approval gate, design §9.1)', () => {
     });
 
     it('filters by status', async () => {
-      const draft = await service.create(
-        createDto({ name: 'draft_one' }),
-        null,
-      );
+      await service.create(createDto({ name: 'draft_one' }), null);
       await service.create(createDto({ name: 'draft_two' }), null);
       const submitted = await service.create(
         createDto({ name: 'submitted_one' }),

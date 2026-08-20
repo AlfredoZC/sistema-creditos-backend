@@ -24,7 +24,10 @@ export class PatientsController {
   @Post()
   @Auth(UserRole.OFFICE, UserRole.ADMIN)
   @ApiResponse({ status: 201, description: 'Patient was created' })
-  @ApiResponse({ status: 409, description: 'Duplicate phone or identity document' })
+  @ApiResponse({
+    status: 409,
+    description: 'Duplicate phone or identity document',
+  })
   create(@Body() createPatientDto: CreatePatientDto) {
     return this.patientsService.create(createPatientDto);
   }
@@ -39,7 +42,10 @@ export class PatientsController {
   @Get(':id')
   @Auth()
   @ApiResponse({ status: 200, description: 'Patient found' })
-  @ApiResponse({ status: 403, description: 'Patients can only read their own record' })
+  @ApiResponse({
+    status: 403,
+    description: 'Patients can only read their own record',
+  })
   findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.patientsService.findOne(id, user);
   }
@@ -47,8 +53,14 @@ export class PatientsController {
   @Patch(':id')
   @Auth()
   @ApiResponse({ status: 200, description: 'Patient updated' })
-  @ApiResponse({ status: 403, description: 'Patients can only update their own record' })
-  @ApiResponse({ status: 409, description: 'Duplicate phone or identity document' })
+  @ApiResponse({
+    status: 403,
+    description: 'Patients can only update their own record',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Duplicate phone or identity document',
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updatePatientDto: UpdatePatientDto,

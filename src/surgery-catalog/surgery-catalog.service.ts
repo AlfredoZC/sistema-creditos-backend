@@ -50,7 +50,9 @@ export class SurgeryCatalogService {
   }
 
   async findOne(id: string): Promise<SurgeryCatalog> {
-    const entry = await this.surgeryCatalogRepository.findOne({ where: { id } });
+    const entry = await this.surgeryCatalogRepository.findOne({
+      where: { id },
+    });
     if (!entry) throw new NotFoundException('Catalog entry not found');
     return entry;
   }

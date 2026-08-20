@@ -1,10 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Surgery } from '../../surgeries/entities/surgery.entity';
 import { decimalTransformer } from '../../common/transformers';
-import {
-  PaymentPlanStatus,
-  PaymentPlanType,
-} from '../../common/enums';
+import { PaymentPlanStatus, PaymentPlanType } from '../../common/enums';
 import {
   Column,
   Entity,

@@ -16,7 +16,9 @@ export class AuthSingleRole1786000000001 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TYPE "user_role" AS ENUM ('patient', 'doctor', 'office', 'admin')`,
     );
-    await queryRunner.query(`ALTER TABLE "users" ADD COLUMN "role" "user_role"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD COLUMN "role" "user_role"`,
+    );
     await queryRunner.query(
       `UPDATE "users" SET "role" = CASE "roles"[1]
          WHEN 'admin' THEN 'admin'::"user_role"
@@ -51,7 +53,9 @@ export class AuthSingleRole1786000000001 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "users" RENAME COLUMN "is_active" TO "isActive"`,
     );
-    await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "name" TYPE text`);
+    await queryRunner.query(
+      `ALTER TABLE "users" ALTER COLUMN "name" TYPE text`,
+    );
     await queryRunner.query(
       `ALTER TABLE "users" ALTER COLUMN "password" TYPE text`,
     );

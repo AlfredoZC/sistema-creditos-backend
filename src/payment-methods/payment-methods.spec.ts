@@ -90,7 +90,11 @@ describe('payment methods API (design sections 5.10 and 11)', () => {
       .set('Authorization', `Bearer ${token}`);
   }
 
-  function updateMethod(token: string, id: string, body: Record<string, unknown>) {
+  function updateMethod(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/payment-methods/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -131,13 +135,13 @@ describe('payment methods API (design sections 5.10 and 11)', () => {
       const doctorList = await listMethods(doctor);
 
       expect(patientList.status).toBe(200);
-      expect((patientList.body as { name: string }[]).map((m) => m.name)).toContain(
-        'cash',
-      );
+      expect(
+        (patientList.body as { name: string }[]).map((m) => m.name),
+      ).toContain('cash');
       expect(doctorList.status).toBe(200);
-      expect((doctorList.body as { name: string }[]).map((m) => m.name)).toContain(
-        'bank_transfer',
-      );
+      expect(
+        (doctorList.body as { name: string }[]).map((m) => m.name),
+      ).toContain('bank_transfer');
     });
 
     it('hides a disabled method from the list and shows it again after re-enabling', async () => {

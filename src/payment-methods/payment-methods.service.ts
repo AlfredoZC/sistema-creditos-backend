@@ -1,8 +1,4 @@
-import {
-  HttpException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { handleDatabaseError } from '../common/errors';
@@ -21,7 +17,9 @@ export class PaymentMethodsService {
    * Duplicate names surface as 409 through the shared handler: the migration
    * declares uq_payment_methods_name UNIQUE, so PG 23505 fires on the insert.
    */
-  async create(createPaymentMethodDto: CreatePaymentMethodDto): Promise<PaymentMethod> {
+  async create(
+    createPaymentMethodDto: CreatePaymentMethodDto,
+  ): Promise<PaymentMethod> {
     try {
       const method = this.paymentMethodRepository.create({
         name: createPaymentMethodDto.name,
@@ -44,7 +42,9 @@ export class PaymentMethodsService {
   }
 
   async findOne(id: string): Promise<PaymentMethod> {
-    const method = await this.paymentMethodRepository.findOne({ where: { id } });
+    const method = await this.paymentMethodRepository.findOne({
+      where: { id },
+    });
     if (!method) throw new NotFoundException('Payment method not found');
     return method;
   }

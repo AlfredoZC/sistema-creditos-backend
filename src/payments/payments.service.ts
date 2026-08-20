@@ -262,7 +262,9 @@ export class PaymentsService {
       });
       if (!installment) throw new NotFoundException('Installment not found');
 
-      const paidAfter = new Decimal(installment.paidAmount).plus(payment.amount);
+      const paidAfter = new Decimal(installment.paidAmount).plus(
+        payment.amount,
+      );
       // Design D1: paid_amount is an accumulator capped by total_amount; an
       // overpayment is a conflict, the explicit path is principal_amortization.
       if (paidAfter.gt(installment.totalAmount)) {
@@ -485,7 +487,8 @@ export class PaymentsService {
 
   private isStaff(currentUser: User): boolean {
     return (
-      currentUser.role === UserRole.OFFICE || currentUser.role === UserRole.ADMIN
+      currentUser.role === UserRole.OFFICE ||
+      currentUser.role === UserRole.ADMIN
     );
   }
 }

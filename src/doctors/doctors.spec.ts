@@ -119,7 +119,11 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
       .set('Authorization', `Bearer ${token}`);
   }
 
-  function updateDoctor(token: string, id: string, body: Record<string, unknown>) {
+  function updateDoctor(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/doctors/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -333,17 +337,16 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
       const first = await createDoctor(token, doctorBody());
       const second = await createDoctor(token, doctorBody());
 
-      const response = await updateDoctor(
-        token,
-        second.body.id as string,
-        { professionalLicense: first.body.professionalLicense as string },
-      );
+      const response = await updateDoctor(token, second.body.id as string, {
+        professionalLicense: first.body.professionalLicense as string,
+      });
 
       expect(response.status).toBe(409);
-      const doctorRows: { professional_license: string }[] = await dataSource.query(
-        'SELECT professional_license FROM doctors WHERE id = $1',
-        [second.body.id as string],
-      );
+      const doctorRows: { professional_license: string }[] =
+        await dataSource.query(
+          'SELECT professional_license FROM doctors WHERE id = $1',
+          [second.body.id as string],
+        );
       expect(doctorRows[0].professional_license).toBe(
         second.body.professionalLicense,
       );
@@ -354,9 +357,13 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
       const created = await createDoctor(office, doctorBody());
       const doctorToken = await tokenForUserId(created.body.userId as string);
 
-      const response = await updateDoctor(doctorToken, created.body.id as string, {
-        specialty: 'Neurology',
-      });
+      const response = await updateDoctor(
+        doctorToken,
+        created.body.id as string,
+        {
+          specialty: 'Neurology',
+        },
+      );
 
       expect(response.status).toBe(403);
     });
@@ -414,7 +421,11 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
     it('rejects creation missing any of firstName, paternalLastName or phone (400, account path)', async () => {
       const token = await officeToken();
 
-      for (const missing of ['firstName', 'paternalLastName', 'phone'] as const) {
+      for (const missing of [
+        'firstName',
+        'paternalLastName',
+        'phone',
+      ] as const) {
         const body = doctorBody() as Record<string, unknown>;
         delete body[missing];
         const response = await createDoctor(token, body);
@@ -430,7 +441,11 @@ describe('doctors API (mandatory web account, design sections 5.4 and 8.1-T8)', 
         UserRole.PATIENT,
       );
 
-      for (const missing of ['firstName', 'paternalLastName', 'phone'] as const) {
+      for (const missing of [
+        'firstName',
+        'paternalLastName',
+        'phone',
+      ] as const) {
         const body: Record<string, unknown> = {
           userId: existingUserId,
           specialty: 'Pediatrics',

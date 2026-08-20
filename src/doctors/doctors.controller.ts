@@ -23,7 +23,10 @@ export class DoctorsController {
 
   @Post()
   @Auth(UserRole.OFFICE, UserRole.ADMIN)
-  @ApiResponse({ status: 201, description: 'Doctor was created with its web account' })
+  @ApiResponse({
+    status: 201,
+    description: 'Doctor was created with its web account',
+  })
   @ApiResponse({ status: 409, description: 'Duplicate professional license' })
   create(@Body() createDoctorDto: CreateDoctorDto) {
     return this.doctorsService.create(createDoctorDto);
@@ -39,7 +42,10 @@ export class DoctorsController {
   @Get(':id')
   @Auth(UserRole.DOCTOR, UserRole.OFFICE, UserRole.ADMIN)
   @ApiResponse({ status: 200, description: 'Doctor found' })
-  @ApiResponse({ status: 403, description: 'Doctors can only read their own record' })
+  @ApiResponse({
+    status: 403,
+    description: 'Doctors can only read their own record',
+  })
   findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.doctorsService.findOne(id, user);
   }

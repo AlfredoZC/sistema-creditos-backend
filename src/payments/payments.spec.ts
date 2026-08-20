@@ -135,15 +135,6 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
     return { id, token: await tokenForUserId(id) };
   }
 
-  async function adminUser(): Promise<{ id: string; token: string }> {
-    const id = await insertUserRaw(
-      emailFor(`admin.pay.${uniqueCounter++}`),
-      'Admin Pay',
-      UserRole.ADMIN,
-    );
-    return { id, token: await tokenForUserId(id) };
-  }
-
   async function patientUser(): Promise<{ id: string; token: string }> {
     const id = await insertUserRaw(
       emailFor(`patient.pay.${uniqueCounter++}`),
@@ -155,7 +146,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
 
   // userId optional: NULL = hybrid model (no web account), provided = the
   // patient owns a user account (needed for own-plan payment scenarios).
-  async function createPatientRaw(userId: string | null = null): Promise<string> {
+  async function createPatientRaw(
+    userId: string | null = null,
+  ): Promise<string> {
     const rows: IdRow[] = await dataSource.query(
       `INSERT INTO patients (user_id, identity_document, first_name, paternal_last_name, phone)
        VALUES ($1, $2, $3, $4, $5)
@@ -183,7 +176,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         baseCost: '8000.00',
       });
     expect(response.status).toBe(201);
-    return { id: response.body.id as string, baseCost: response.body.baseCost as string };
+    return {
+      id: response.body.id as string,
+      baseCost: response.body.baseCost as string,
+    };
   }
 
   async function createSurgery(
@@ -217,7 +213,12 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
   ): Promise<{ planId: string; surgeryId: string }> {
     const patientId = await createPatientRaw();
     const catalog = await createCatalogEntry(officeToken);
-    const surgeryId = await createSurgery(officeToken, patientId, catalog.id, totalCost);
+    const surgeryId = await createSurgery(
+      officeToken,
+      patientId,
+      catalog.id,
+      totalCost,
+    );
     const body: Record<string, unknown> = {
       surgeryId,
       type: PaymentPlanType.CREDIT,
@@ -244,7 +245,12 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
     installmentCount: number,
   ): Promise<{ planId: string; surgeryId: string }> {
     const catalog = await createCatalogEntry(officeToken);
-    const surgeryId = await createSurgery(officeToken, patientId, catalog.id, totalCost);
+    const surgeryId = await createSurgery(
+      officeToken,
+      patientId,
+      catalog.id,
+      totalCost,
+    );
     const response = await request(app.getHttpServer())
       .post('/api/payment-plans')
       .set('Authorization', `Bearer ${officeToken}`)
@@ -263,7 +269,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
     const created = await request(app.getHttpServer())
       .post('/api/payment-methods')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: `Method-${RUN_SUFFIX}-${uniqueCounter++}`, isEnabled: true });
+      .send({
+        name: `Method-${RUN_SUFFIX}-${uniqueCounter++}`,
+        isEnabled: true,
+      });
     expect(created.status).toBe(201);
     const disabled = await request(app.getHttpServer())
       .patch(`/api/payment-methods/${created.body.id as string}`)
@@ -305,7 +314,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
     );
   }
 
-  async function installmentIdFor(planId: string, number: number): Promise<string> {
+  async function installmentIdFor(
+    planId: string,
+    number: number,
+  ): Promise<string> {
     const rows = await installmentRows(planId);
     const match = rows.find((row) => row.installment_number === number);
     if (!match) throw new Error(`installment ${number} not found`);
@@ -328,15 +340,6 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
        FROM audit_logs WHERE record_id = $1
        ORDER BY created_at`,
       [paymentId],
-    );
-  }
-
-  async function auditRowsForPlan(planId: string): Promise<AuditRow[]> {
-    return dataSource.query(
-      `SELECT user_id, action, table_name, record_id, previous_data, new_data
-       FROM audit_logs WHERE record_id = $1
-       ORDER BY created_at`,
-      [planId],
     );
   }
 
@@ -421,7 +424,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(audits[0].user_id).toBe(office.id);
       expect(audits[0].table_name).toBe('payments');
       expect(audits[0].record_id).toBe(response.body.id);
-      expect(audits[0].previous_data?.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+      expect(audits[0].previous_data?.status).toBe(
+        PaymentStatus.PENDING_CONFIRMATION,
+      );
       expect(audits[0].new_data?.status).toBe(PaymentStatus.CONFIRMED);
       expect(audits[0].new_data?.outstandingBalance).toBe('9086.73');
       // Recalculation is NEVER triggered for a plain installment payment.
@@ -432,12 +437,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       const office = await officeUser();
       // Far-future due dates keep every remaining installment pending but not
       // overdue, so the plan evaluation yields 'active' after the payment.
-      const { planId } = await createCreditPlan(
-        office.token,
-        '10000.00',
-        10,
-        { startDate: '2999-01-01' },
-      );
+      const { planId } = await createCreditPlan(office.token, '10000.00', 10, {
+        startDate: '2999-01-01',
+      });
       const installment1 = await installmentIdFor(planId, 1);
 
       const response = await registerPayment(office.token, {
@@ -763,7 +765,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       });
 
       expect(response.status).toBe(409);
-      expect(response.body.message).toBe('amount exceeds the outstanding balance');
+      expect(response.body.message).toBe(
+        'amount exceeds the outstanding balance',
+      );
       expect(await paymentRows(planId)).toHaveLength(0);
       const plan = (await planRows(planId))[0];
       expect(plan.outstanding_balance).toBe('5000.00');
@@ -817,7 +821,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(upload.status).toBe(201);
       expect(upload.body.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
 
-      const response = await confirmPayment(office.token, upload.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe(PaymentStatus.CONFIRMED);
@@ -851,7 +858,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         amount: '500.00',
         type: PaymentType.INSTALLMENT_PAYMENT,
       });
-      expect(await confirmPayment(office.token, first.body.id as string)).toMatchObject({
+      expect(
+        await confirmPayment(office.token, first.body.id as string),
+      ).toMatchObject({
         status: 200,
       });
 
@@ -862,7 +871,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         amount: '613.27',
         type: PaymentType.INSTALLMENT_PAYMENT,
       });
-      const response = await confirmPayment(office.token, second.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        second.body.id as string,
+      );
 
       // Spec "Installment fully paid": 500.00 + 613.27 = total 1,113.27 ->
       // status 'paid'; the balance takes the remaining principal credit
@@ -936,15 +948,25 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
 
       const confirmed = await registerPayment(office.token, body);
       expect(confirmed.status).toBe(201);
-      const again = await confirmPayment(office.token, confirmed.body.id as string);
+      const again = await confirmPayment(
+        office.token,
+        confirmed.body.id as string,
+      );
       expect(again.status).toBe(409);
-      expect(again.body.message).toBe('Payment is already confirmed or rejected');
+      expect(again.body.message).toBe(
+        'Payment is already confirmed or rejected',
+      );
 
       const rejected = await registerPayment(patient.token, body);
-      expect(await rejectPayment(office.token, rejected.body.id as string)).toMatchObject({
+      expect(
+        await rejectPayment(office.token, rejected.body.id as string),
+      ).toMatchObject({
         status: 200,
       });
-      const afterReject = await confirmPayment(office.token, rejected.body.id as string);
+      const afterReject = await confirmPayment(
+        office.token,
+        rejected.body.id as string,
+      );
       expect(afterReject.status).toBe(409);
     });
 
@@ -967,7 +989,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         type: PaymentType.INSTALLMENT_PAYMENT,
       });
 
-      const response = await confirmPayment(patient.token, upload.body.id as string);
+      const response = await confirmPayment(
+        patient.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(403);
     });
@@ -1009,7 +1034,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         [planId],
       );
 
-      const response = await confirmPayment(office.token, upload.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(409);
       expect(response.body.message).toBe('Payment plan is not active');
@@ -1079,8 +1107,12 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(recalcAudits[0].new_data.outstandingBalance).toBe('5155.19');
       expect(recalcAudits[0].previous_data.installments).toHaveLength(8);
       expect(recalcAudits[0].new_data.installments).toHaveLength(8);
-      expect(recalcAudits[0].new_data.installments[0].totalAmount).toBe('703.73');
-      expect(recalcAudits[0].new_data.installments[7].totalAmount).toBe('703.76');
+      expect(recalcAudits[0].new_data.installments[0].totalAmount).toBe(
+        '703.73',
+      );
+      expect(recalcAudits[0].new_data.installments[7].totalAmount).toBe(
+        '703.76',
+      );
     });
 
     it('recalculates with reduce_term and reproduces Option B exactly', async () => {
@@ -1104,7 +1136,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         amortizationMode: AmortizationMode.REDUCE_TERM,
       });
 
-      const response = await confirmPayment(office.token, upload.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       const plan = (await planRows(planId))[0];
@@ -1154,7 +1189,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       const response = await confirmPayment(office.token, paymentId);
 
       expect(response.status).toBe(409);
-      expect(response.body.message).toBe('amount exceeds the outstanding balance');
+      expect(response.body.message).toBe(
+        'amount exceeds the outstanding balance',
+      );
       const payments = await paymentRows(planId);
       expect(payments[0].status).toBe(PaymentStatus.PENDING_CONFIRMATION);
       const plan = (await planRows(planId))[0];
@@ -1183,7 +1220,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         amortizationMode: AmortizationMode.REDUCE_INSTALLMENT,
       });
 
-      const response = await confirmPayment(office.token, upload.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       const plan = (await planRows(planId))[0];
@@ -1224,7 +1264,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         amount: '7000.00',
         type: PaymentType.INSTALLMENT_PAYMENT,
       });
-      const response = await confirmPayment(office.token, upload.body.id as string);
+      const response = await confirmPayment(
+        office.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       const plan = (await planRows(planId))[0];
@@ -1278,7 +1321,9 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       expect(audits[0].user_id).toBe(office.id);
       expect(audits[0].table_name).toBe('payments');
       expect(audits[0].record_id).toBe(paymentId);
-      expect(audits[0].previous_data?.status).toBe(PaymentStatus.PENDING_CONFIRMATION);
+      expect(audits[0].previous_data?.status).toBe(
+        PaymentStatus.PENDING_CONFIRMATION,
+      );
       expect(audits[0].new_data?.status).toBe(PaymentStatus.REJECTED);
     });
 
@@ -1302,16 +1347,26 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
       };
 
       const confirmed = await registerPayment(office.token, body);
-      const confirmAgain = await rejectPayment(office.token, confirmed.body.id as string);
+      const confirmAgain = await rejectPayment(
+        office.token,
+        confirmed.body.id as string,
+      );
       expect(confirmAgain.status).toBe(409);
 
       const rejected = await registerPayment(patient.token, body);
-      expect(await rejectPayment(office.token, rejected.body.id as string)).toMatchObject({
+      expect(
+        await rejectPayment(office.token, rejected.body.id as string),
+      ).toMatchObject({
         status: 200,
       });
-      const rejectAgain = await rejectPayment(office.token, rejected.body.id as string);
+      const rejectAgain = await rejectPayment(
+        office.token,
+        rejected.body.id as string,
+      );
       expect(rejectAgain.status).toBe(409);
-      expect(rejectAgain.body.message).toBe('Payment is already confirmed or rejected');
+      expect(rejectAgain.body.message).toBe(
+        'Payment is already confirmed or rejected',
+      );
     });
 
     it('forbids a patient from rejecting (403)', async () => {
@@ -1333,7 +1388,10 @@ describe('payments API (design sections 5.11, 8.1-T2..T5 and 11)', () => {
         type: PaymentType.INSTALLMENT_PAYMENT,
       });
 
-      const response = await rejectPayment(patient.token, upload.body.id as string);
+      const response = await rejectPayment(
+        patient.token,
+        upload.body.id as string,
+      );
 
       expect(response.status).toBe(403);
     });

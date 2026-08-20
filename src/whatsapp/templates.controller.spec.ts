@@ -2,11 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
 import { DataSource } from 'typeorm';
-import {
-  TemplateCategory,
-  TemplateStatus,
-  UserRole,
-} from '../common/enums';
+import { TemplateCategory, TemplateStatus, UserRole } from '../common/enums';
 import { ensureTestDbReady } from '../test-utils/setup-test-db';
 import { buildTestingApp } from '../test-utils/test-app';
 
@@ -119,7 +115,11 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
       .set('Authorization', `Bearer ${token}`);
   }
 
-  function updateTemplate(token: string, id: string, body: Record<string, unknown>) {
+  function updateTemplate(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ) {
     return request(app.getHttpServer())
       .patch(`/api/whatsapp/templates/${id}`)
       .set('Authorization', `Bearer ${token}`)
@@ -246,9 +246,13 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
         language: 'es',
         body: TEMPLATE_BODY,
       });
-      const updated = await updateTemplate(officeToken, submitted.body.id as string, {
-        status: TemplateStatus.SUBMITTED,
-      });
+      const updated = await updateTemplate(
+        officeToken,
+        submitted.body.id as string,
+        {
+          status: TemplateStatus.SUBMITTED,
+        },
+      );
       expect(updated.status).toBe(200);
 
       const drafts = await listTemplates(
@@ -265,9 +269,9 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
         (drafts.body as { name: string }[]).map((t) => t.name).sort(),
       ).toEqual(['draft_one', 'draft_two']);
       expect(submittedList.status).toBe(200);
-      expect((submittedList.body as { name: string }[]).map((t) => t.name)).toEqual([
-        'submitted_one',
-      ]);
+      expect(
+        (submittedList.body as { name: string }[]).map((t) => t.name),
+      ).toEqual(['submitted_one']);
     });
 
     it('filters by category (200, only matching templates)', async () => {
@@ -314,7 +318,10 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
         body: TEMPLATE_BODY,
       });
 
-      const response = await getTemplate(officeToken, created.body.id as string);
+      const response = await getTemplate(
+        officeToken,
+        created.body.id as string,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(created.body.id);
@@ -343,9 +350,13 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
         body: TEMPLATE_BODY,
       });
 
-      const response = await updateTemplate(officeToken, created.body.id as string, {
-        body: 'Nuevo cuerpo {{1}}',
-      });
+      const response = await updateTemplate(
+        officeToken,
+        created.body.id as string,
+        {
+          body: 'Nuevo cuerpo {{1}}',
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.bodyTemplate).toBe('Nuevo cuerpo {{1}}');
@@ -403,7 +414,10 @@ describe('TemplatesController (HTTP contract, design §9.1)', () => {
         language: 'es',
         body: TEMPLATE_BODY,
       });
-      const first = await deactivateTemplate(officeToken, created.body.id as string);
+      const first = await deactivateTemplate(
+        officeToken,
+        created.body.id as string,
+      );
       expect(first.status).toBe(200);
 
       const second = await deactivateTemplate(

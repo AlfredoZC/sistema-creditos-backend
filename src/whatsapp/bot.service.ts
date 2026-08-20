@@ -18,7 +18,10 @@ import {
   SendTemplateMessageInput,
   WhatsAppProvider,
 } from './provider/whatsapp-provider.interface';
-import { PatientDebtSummary, PaymentPlansService } from '../payment-plans/payment-plans.service';
+import {
+  PatientDebtSummary,
+  PaymentPlansService,
+} from '../payment-plans/payment-plans.service';
 
 const CSW_WINDOW_MS = 24 * 60 * 60 * 1000;
 const LOCKOUT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -394,7 +397,8 @@ export class BotService {
 
     const updated = await this.dataSource.transaction(async (manager) => {
       conversation.failedAttempts += 1;
-      const lockedOut = conversation.failedAttempts >= MAX_IDENTIFICATION_ATTEMPTS;
+      const lockedOut =
+        conversation.failedAttempts >= MAX_IDENTIFICATION_ATTEMPTS;
       if (lockedOut) {
         conversation.lockoutUntil = new Date(
           processingTime.getTime() + LOCKOUT_WINDOW_MS,
@@ -467,14 +471,10 @@ export class BotService {
     // Nothing is sent (proposal Q1); the failure is recorded in the reply
     // row metadata. Type 'text' — the template_requires_template_type CHECK
     // forbids a 'template' row without a template_id.
-    await this.persistReplyRow(
-      updated,
-      replyBody,
-      intent,
-      'text',
-      null,
-      { status: 'failed', error: NO_DISPATCHABLE_UTILITY_TEMPLATE_ERROR },
-    );
+    await this.persistReplyRow(updated, replyBody, intent, 'text', null, {
+      status: 'failed',
+      error: NO_DISPATCHABLE_UTILITY_TEMPLATE_ERROR,
+    });
   }
 
   /**
@@ -517,9 +517,7 @@ export class BotService {
     summary: PatientDebtSummary,
     intent: BotIntent | null,
   ): Promise<void> {
-    const placeholderNumbers = extractPlaceholderNumbers(
-      template.bodyTemplate,
-    );
+    const placeholderNumbers = extractPlaceholderNumbers(template.bodyTemplate);
     const variables = resolveDebtTemplateVariables(summary, placeholderNumbers);
     const body = intent
       ? formatDebtIntentReply(summary, intent)
@@ -675,7 +673,9 @@ export class BotService {
       .where('template.category = :category', {
         category: TemplateCategory.UTILITY,
       })
-      .andWhere('template.status = :status', { status: TemplateStatus.APPROVED })
+      .andWhere('template.status = :status', {
+        status: TemplateStatus.APPROVED,
+      })
       .andWhere('template.is_active = :isActive', { isActive: true })
       .orderBy('template.created_at', 'DESC')
       .getOne();

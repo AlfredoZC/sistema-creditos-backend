@@ -46,7 +46,10 @@ export class SurgeryDoctor {
   @JoinColumn({ name: 'doctor_id' })
   doctor?: Doctor;
 
-  @ApiProperty({ enum: SurgeryDoctorRole, default: SurgeryDoctorRole.PRINCIPAL })
+  @ApiProperty({
+    enum: SurgeryDoctorRole,
+    default: SurgeryDoctorRole.PRINCIPAL,
+  })
   @Column({
     type: 'enum',
     enum: SurgeryDoctorRole,
