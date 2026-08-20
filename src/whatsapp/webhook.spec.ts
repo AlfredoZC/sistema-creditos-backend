@@ -1,3 +1,4 @@
+import { uniqueMobile8 } from '../test-utils/unique-phone';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -60,10 +61,9 @@ function nowSeconds(): number {
 // patients.phone is UNIQUE (migration 002) and patient rows are shared with
 // other suites on db_creditos_test — every insert needs a fresh phone.
 function uniquePhone(): string {
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `7${pid3}${ts2}${seq2}`;
+  // Delegado al helper compartido: los contadores por archivo colisionaban
+  // entre suites al correr todo en un mismo proceso (--runInBand).
+  return uniqueMobile8();
 }
 
 interface IdRow {

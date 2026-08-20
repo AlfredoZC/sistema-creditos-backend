@@ -16,18 +16,18 @@ import {
   extractPlaceholderNumbers,
 } from './dispatches.service';
 import { WHATSAPP_PROVIDER } from './whatsapp.module';
+import { uniqueMobile8 } from '../test-utils/unique-phone';
 
 jest.setTimeout(60000);
 
 const RUN_SUFFIX = `${process.pid}${Date.now()}`;
 let uniqueCounter = 0;
 
+// 8-digit national mobile starting with 7 — exercises the +591 heuristic. La
+// unicidad la garantiza el helper compartido: el contador por archivo
+// colisionaba con el de otras suites al correr todo en un mismo proceso.
 function uniquePhone(): string {
-  // 8-digit national mobile starting with 7 — exercises the +591 heuristic.
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `7${pid3}${ts2}${seq2}`;
+  return uniqueMobile8();
 }
 
 function uniqueIdentityDocument(): string {

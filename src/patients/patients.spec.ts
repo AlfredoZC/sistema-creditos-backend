@@ -1,3 +1,4 @@
+import { uniqueMobile8 as sharedUniqueMobile8 } from '../test-utils/unique-phone';
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
@@ -24,22 +25,16 @@ function uniquePhone(): string {
 }
 
 // 8-digit national mobiles starting with 7 — exercise the +591-mobile
-// heuristic end-to-end. pid/first, timestamp/last, and counter digits
-// (counter truncated to 2 digits so the total stays exactly 8) keep every
-// value unique per run and within the run on the shared db_creditos_test.
+// heuristic end-to-end. La unicidad la garantiza el helper compartido: los
+// contadores por archivo colisionaban entre suites al correr todo en un mismo
+// proceso (--runInBand).
 function uniqueMobile8(): string {
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `7${pid3}${ts2}${seq2}`;
+  return sharedUniqueMobile8();
 }
 
 // 8-digit landline (starts with 2) — same uniqueness scheme, heuristic n/a.
 function uniqueLandline8(): string {
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `2${pid3}${ts2}${seq2}`;
+  return `2${sharedUniqueMobile8().slice(1)}`;
 }
 
 function uniqueIdentityDocument(): string {

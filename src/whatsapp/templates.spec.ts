@@ -1,3 +1,4 @@
+import { uniqueMobile8 } from '../test-utils/unique-phone';
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
@@ -54,10 +55,9 @@ function uniqueIdentityDocument(): string {
 // patients.phone is UNIQUE (migration 002); rows are shared with other
 // integration suites on db_creditos_test — every insert needs a fresh phone.
 function uniquePhone(): string {
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `7${pid3}${ts2}${seq2}`;
+  // Delegado al helper compartido: los contadores por archivo colisionaban
+  // entre suites al correr todo en un mismo proceso (--runInBand).
+  return uniqueMobile8();
 }
 
 function emailFor(localPart: string): string {
@@ -258,6 +258,18 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
         ORDER BY created_at`,
       [recordId],
     );
+  }
+
+  /**
+   * `created_at` es la hora de la TRANSACCION: dos entradas escritas dentro de
+   * la misma transaccion comparten el valor exacto, asi que su orden relativo
+   * no esta definido y comparar la secuencia tal cual fallaba de forma
+   * intermitente. Lo que el contrato exige es QUE acciones quedaron
+   * registradas, no en que orden dentro de una misma transaccion: se comparan
+   * como multiconjunto. Una accion faltante o de mas sigue fallando.
+   */
+  function expectSameAudits(actual: string[], expected: string[]): void {
+    expect([...actual].sort()).toEqual([...expected].sort());
   }
 
   async function dispatchCount(): Promise<string> {
@@ -475,12 +487,15 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
       // when the status moves: body PATCH → updated, status PATCH → updated
       // + status_changed.
       const audits = await auditsFor(created.body.id as string);
-      expect(audits.map((a) => a.action)).toEqual([
-        AUDIT_TEMPLATE_CREATED,
-        AUDIT_TEMPLATE_UPDATED,
-        AUDIT_TEMPLATE_UPDATED,
-        AUDIT_TEMPLATE_STATUS_CHANGED,
-      ]);
+      expectSameAudits(
+        audits.map((a) => a.action),
+        [
+          AUDIT_TEMPLATE_CREATED,
+          AUDIT_TEMPLATE_UPDATED,
+          AUDIT_TEMPLATE_UPDATED,
+          AUDIT_TEMPLATE_STATUS_CHANGED,
+        ],
+      );
       expect(audits.every((a) => a.userId === officeId)).toBe(true);
       expect(audits[1].newData).toEqual({
         name: 'crud_lifecycle',
@@ -629,7 +644,7 @@ describe('Template lifecycle integration (task 2.4, design §9.1 + spec "Templat
 
       const audits = await auditsFor(created.body.id as string);
       const actions = audits.map((a) => a.action);
-      expect(actions).toEqual([
+      expectSameAudits(actions, [
         AUDIT_TEMPLATE_CREATED,
         AUDIT_TEMPLATE_STATUS_CHANGED,
         AUDIT_TEMPLATE_STATUS_CHANGED,

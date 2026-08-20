@@ -1,3 +1,4 @@
+import { uniqueMobile8 } from '../test-utils/unique-phone';
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
@@ -78,10 +79,9 @@ const WEBHOOK_PATH = '/api/whatsapp/webhook';
 // other suites on db_creditos_test — every insert needs a fresh phone that
 // normalizes to a canonical +591 number (8 digits starting with 6/7).
 function uniquePhone(): string {
-  const pid3 = String(process.pid).slice(0, 3).padStart(3, '0');
-  const ts2 = String(Date.now()).slice(-2);
-  const seq2 = String(uniqueCounter++).slice(-2).padStart(2, '0');
-  return `7${pid3}${ts2}${seq2}`;
+  // Delegado al helper compartido: los contadores por archivo colisionaban
+  // entre suites al correr todo en un mismo proceso (--runInBand).
+  return uniqueMobile8();
 }
 
 // identity_document is varchar(20) and UNIQUE: pid + timestamp tail + counter.

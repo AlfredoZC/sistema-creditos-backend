@@ -14,6 +14,15 @@ const SETTLED_INSTALLMENT_STATUSES = ['paid', 'cancelled'];
 /** Planes cerrados: sus cuotas viejas no deben molestar al paciente. */
 const CLOSED_PLAN_STATUSES = ['cancelled', 'completed'];
 
+/**
+ * Tope de despachos por corrida y por tipo. Sin el, la primera corrida sobre
+ * una cartera con años de mora acumulada intentaria mandar miles de mensajes
+ * de una sentada, castigando al proveedor y dejando la corrida colgada. Como
+ * lo ya enviado nunca se repite, el atraso se drena en las corridas
+ * siguientes.
+ */
+const DEFAULT_MAX_PER_RUN = 200;
+
 const DEFAULT_TEMPLATE_DUE_SOON = 'payment_reminder';
 const DEFAULT_TEMPLATE_OVERDUE = 'payment_overdue';
 
@@ -97,7 +106,8 @@ export class RemindersService {
       return;
     }
 
-    for (const candidate of await this.candidates(kind)) {
+    const candidates = await this.candidates(kind, this.maxPerRun());
+    for (const candidate of candidates) {
       const reminderId = await this.claim(candidate.installmentId, kind);
       if (!reminderId) {
         // Otra corrida ya lo mando: la UNIQUE hizo su trabajo.
@@ -155,7 +165,19 @@ export class RemindersService {
     return rows.length > 0 ? rows[0].id : null;
   }
 
-  private async candidates(kind: ReminderKind): Promise<CandidateRow[]> {
+  private maxPerRun(): number {
+    const configured = Number(
+      this.configService.get<string>('REMINDER_MAX_PER_RUN'),
+    );
+    return Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_MAX_PER_RUN;
+  }
+
+  private async candidates(
+    kind: ReminderKind,
+    limit: number,
+  ): Promise<CandidateRow[]> {
     // Los dos tipos comparten el mismo query salvo la condicion de fecha, que
     // ademas cambia la cantidad de parametros. Se arma la lista primero y el
     // indice de `kind` se calcula a partir de ella: Postgres rechaza el query
@@ -171,6 +193,8 @@ export class RemindersService {
     }
     parameters.push(kind);
     const kindParameter = `$${parameters.length}`;
+    parameters.push(limit);
+    const limitParameter = `$${parameters.length}`;
 
     return this.dataSource.query(
       `SELECT i.id                                    AS "installmentId",
@@ -188,7 +212,8 @@ export class RemindersService {
           AND i.status <> ALL($1)
           AND p.status <> ALL($2)
           AND r.id IS NULL
-        ORDER BY i.due_date ASC`,
+        ORDER BY i.due_date ASC
+        LIMIT ${limitParameter}`,
       parameters,
     );
   }

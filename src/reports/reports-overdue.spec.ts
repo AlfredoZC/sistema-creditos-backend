@@ -146,6 +146,34 @@ describe('GET /api/reports/overdue-installments', () => {
     return body.data.filter((row) => row.planId === planId);
   }
 
+  /**
+   * La base de test es compartida y, cuando corre la suite completa, tiene
+   * cientos de cuotas vencidas mas antiguas que las de este fixture. Como el
+   * endpoint ordena por antiguedad, las filas propias pueden caer en cualquier
+   * pagina: hay que recorrerlas todas en vez de asumir que entran en la
+   * primera.
+   */
+  async function collectOwnRows(token: string): Promise<OverdueRow[]> {
+    const pageSize = 200;
+    const collected: OverdueRow[] = [];
+    let offset = 0;
+    let total = Number.POSITIVE_INFINITY;
+
+    while (offset < total) {
+      const response = await getOverdue(
+        token,
+        `?limit=${pageSize}&offset=${offset}`,
+      ).expect(200);
+      const body = response.body as OverdueBody;
+      total = body.total;
+      collected.push(...ownRows(body));
+      if (body.data.length === 0) break;
+      offset += pageSize;
+    }
+
+    return collected;
+  }
+
   it('rejects anonymous access', async () => {
     await request(app.getHttpServer())
       .get('/api/reports/overdue-installments')
@@ -159,8 +187,7 @@ describe('GET /api/reports/overdue-installments', () => {
 
   it('lists unsettled overdue installments with the patient behind them', async () => {
     const officeToken = await tokenFor(UserRole.OFFICE);
-    const response = await getOverdue(officeToken, '?limit=200').expect(200);
-    const rows = ownRows(response.body as OverdueBody);
+    const rows = await collectOwnRows(officeToken);
 
     // La cuota 3 esta pagada: quedan dos.
     expect(rows).toHaveLength(2);
@@ -181,8 +208,7 @@ describe('GET /api/reports/overdue-installments', () => {
 
   it('orders by days overdue, most overdue first', async () => {
     const officeToken = await tokenFor(UserRole.OFFICE);
-    const response = await getOverdue(officeToken, '?limit=200').expect(200);
-    const rows = ownRows(response.body as OverdueBody);
+    const rows = await collectOwnRows(officeToken);
 
     expect(rows[0].daysOverdue).toBeGreaterThan(rows[1].daysOverdue);
   });

@@ -45,7 +45,27 @@ describe('RemindersService', () => {
     provider = app.get(WHATSAPP_PROVIDER);
     await ensureTemplate('payment_reminder');
     await ensureTemplate('payment_overdue');
+    await markExistingInstallmentsAsAlreadyReminded();
   });
+
+  /**
+   * La base de test es compartida: cuando corre la suite completa hay cientos
+   * de cuotas vencidas de otras suites, y `run()` intentaria despachar todas,
+   * pasandose del timeout por razones ajenas a lo que este spec verifica.
+   *
+   * Marcar lo preexistente como ya notificado deja un punto de partida
+   * conocido sin tocar datos de nadie: `installment_reminders` es una tabla que
+   * solo usa este modulo.
+   */
+  async function markExistingInstallmentsAsAlreadyReminded(): Promise<void> {
+    await dataSource.query(
+      `INSERT INTO installment_reminders (installment_id, kind)
+       SELECT i.id, k.kind::installment_reminder_kind
+         FROM installments i
+        CROSS JOIN (VALUES ('due_soon'), ('overdue')) AS k(kind)
+       ON CONFLICT (installment_id, kind) DO NOTHING`,
+    );
+  }
 
   afterAll(async () => {
     await app.close();
