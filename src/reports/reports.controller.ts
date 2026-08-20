@@ -1,9 +1,14 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth } from '../auth/decorators';
+import { PaginationDto } from '../common/dtos/pagination.dto';
 import { UserRole } from '../common/enums';
-import { SummaryQueryDto, SummaryResponseDto } from './dto';
-import { ReportsService } from './reports.service';
+import {
+  OverdueInstallmentDto,
+  SummaryQueryDto,
+  SummaryResponseDto,
+} from './dto';
+import { PaginatedOverdue, ReportsService } from './reports.service';
 
 @ApiTags('Reports')
 @Controller('reports')
@@ -16,5 +21,15 @@ export class ReportsController {
   @ApiResponse({ status: 200, type: SummaryResponseDto })
   summary(@Query() query: SummaryQueryDto): Promise<SummaryResponseDto> {
     return this.reportsService.summary(query);
+  }
+
+  // La cola de cobranza: cuotas vencidas sin saldar, la mas atrasada primero.
+  @Get('overdue-installments')
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @ApiResponse({ status: 200, type: [OverdueInstallmentDto] })
+  overdueInstallments(
+    @Query() pagination: PaginationDto,
+  ): Promise<PaginatedOverdue> {
+    return this.reportsService.overdueInstallments(pagination);
   }
 }

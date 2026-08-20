@@ -2,11 +2,37 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import Decimal from 'decimal.js';
 import { DataSource } from 'typeorm';
+import { PaginationDto } from '../common/dtos/pagination.dto';
 import { PaymentPlanStatus } from '../common/enums';
-import { SummaryQueryDto, SummaryResponseDto } from './dto';
+import {
+  OverdueInstallmentDto,
+  SummaryQueryDto,
+  SummaryResponseDto,
+} from './dto';
 
 interface AmountRow {
   amount: string | null;
+}
+
+/** Fila cruda del query de mora: todo llega como texto desde pg. */
+interface OverdueQueryRow {
+  installmentId: string;
+  planId: string;
+  patientId: string;
+  patientName: string;
+  patientPhone: string;
+  installmentNumber: string;
+  dueDate: string;
+  amountDue: string;
+  daysOverdue: string;
+  total: string;
+}
+
+export interface PaginatedOverdue {
+  data: OverdueInstallmentDto[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 interface BucketRow {
@@ -56,6 +82,59 @@ export class ReportsService {
       overdue: bucket(overdueRows),
       dueNext7Days: bucket(dueRows),
       plansByStatus: await this.plansByStatus(),
+    };
+  }
+
+  /**
+   * Cuotas vencidas sin saldar, con el paciente detras y ordenadas por
+   * antiguedad: es la cola de trabajo de cobranza. Devuelve el mismo shape de
+   * paginacion que los demas listados ({ data, total, limit, offset }).
+   */
+  async overdueInstallments(
+    pagination: PaginationDto,
+  ): Promise<PaginatedOverdue> {
+    const { limit = 10, offset = 0 } = pagination;
+
+    const rows: OverdueQueryRow[] = await this.dataSource.query(
+      `SELECT i.id                                            AS "installmentId",
+              p.id                                            AS "planId",
+              pa.id                                           AS "patientId",
+              CONCAT_WS(' ', pa.first_name, pa.paternal_last_name,
+                        pa.maternal_last_name)                AS "patientName",
+              pa.phone                                        AS "patientPhone",
+              i.installment_number                            AS "installmentNumber",
+              to_char(i.due_date, 'YYYY-MM-DD')               AS "dueDate",
+              (i.total_amount - i.paid_amount)::text          AS "amountDue",
+              (CURRENT_DATE - i.due_date)::integer            AS "daysOverdue",
+              COUNT(*) OVER ()::text                          AS "total"
+         FROM installments i
+         JOIN payment_plans p ON p.id = i.payment_plan_id
+         JOIN surgeries s     ON s.id = p.surgery_id
+         JOIN patients pa     ON pa.id = s.patient_id
+        WHERE i.due_date < CURRENT_DATE
+          AND i.status <> ALL($1)
+          AND p.status <> ALL($2)
+        ORDER BY i.due_date ASC, i.installment_number ASC
+        LIMIT $3 OFFSET $4`,
+      [SETTLED_INSTALLMENT_STATUSES, CLOSED_PLAN_STATUSES, limit, offset],
+    );
+
+    return {
+      // COUNT(*) OVER () viaja en cada fila; sin filas, el total es 0.
+      total: rows.length > 0 ? Number(rows[0].total) : 0,
+      limit,
+      offset,
+      data: rows.map((row) => ({
+        installmentId: row.installmentId,
+        planId: row.planId,
+        patientId: row.patientId,
+        patientName: row.patientName,
+        patientPhone: row.patientPhone,
+        installmentNumber: Number(row.installmentNumber),
+        dueDate: row.dueDate,
+        amountDue: money(row.amountDue),
+        daysOverdue: Number(row.daysOverdue),
+      })),
     };
   }
 
