@@ -22,7 +22,7 @@ import { handleDatabaseError } from '../common/errors';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { Installment, PaymentPlan } from '../payment-plans/entities';
 import { RecalculationStrategyFactory } from '../payment-plans/strategies';
-import { CreatePaymentDto } from './dto';
+import { CreatePaymentDto, PaymentQueryDto } from './dto';
 import { Payment } from './entities';
 
 const MONEY_DECIMALS = 2;
@@ -196,8 +196,17 @@ export class PaymentsService {
    * surgery.patient.user_id, which also covers office-recorded rows whose
    * patient_user_id is NULL) plus their own receipt uploads.
    */
-  async findAll(currentUser: User): Promise<Payment[]> {
+  async findAll(
+    currentUser: User,
+    query: PaymentQueryDto = {},
+  ): Promise<Payment[]> {
+    // El filtro por plan no es un lujo: el detalle de un plan lo manda siempre,
+    // y mientras el endpoint lo ignoro, esa pantalla mostro los pagos de TODOS
+    // los planes -de todos los pacientes- como si fueran de ese.
     const payments = await this.paymentRepository.find({
+      where: query.paymentPlanId
+        ? { paymentPlanId: query.paymentPlanId }
+        : undefined,
       relations: [
         'paymentPlan',
         'paymentPlan.surgery',

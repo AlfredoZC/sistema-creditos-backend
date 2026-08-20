@@ -7,12 +7,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
-import { CreatePaymentDto } from './dto';
+import { CreatePaymentDto, PaymentQueryDto } from './dto';
 import { PaymentsService } from './payments.service';
 
 @ApiTags('Payments')
@@ -61,7 +62,10 @@ export class PaymentsController {
   @Get()
   @Auth()
   @ApiResponse({ status: 200, description: 'Payment history' })
-  findAll(@GetUser() user: User) {
-    return this.paymentsService.findAll(user);
+  // `paymentPlanId` acota el historial a un plan. El detalle de un plan lo
+  // manda siempre; mientras el endpoint lo ignoro, esa pantalla mezclo los
+  // pagos de todos los pacientes.
+  findAll(@GetUser() user: User, @Query() query: PaymentQueryDto) {
+    return this.paymentsService.findAll(user, query);
   }
 }
