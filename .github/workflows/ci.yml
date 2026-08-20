@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  # Corre en cualquier rama: el repo no usa PRs para todo y la verificacion
+  # tiene que llegar antes del merge a master, no despues.
   push:
-    branches: [master]
   pull_request:
 
 jobs:
