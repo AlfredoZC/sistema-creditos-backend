@@ -1,2 +1,3 @@
 export * from './create-payment-plan.dto';
 export * from './payment-plan-query.dto';
+export * from './cancel-payment-plan.dto';

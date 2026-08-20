@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -11,7 +13,11 @@ import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, GetUser } from '../auth/decorators';
 import { User } from '../auth/entities/user.entity';
 import { UserRole } from '../common/enums';
-import { CreatePaymentPlanDto, PaymentPlanQueryDto } from './dto';
+import {
+  CancelPaymentPlanDto,
+  CreatePaymentPlanDto,
+  PaymentPlanQueryDto,
+} from './dto';
 import { PaymentPlansService } from './payment-plans.service';
 
 @ApiTags('Payment Plans')
@@ -69,5 +75,25 @@ export class PaymentPlansController {
     @GetUser() user: User,
   ) {
     return this.paymentPlansService.findInstallments(id, user);
+  }
+
+  /**
+   * Anula el plan: la deuda deja de cobrarse. Es una decision administrativa e
+   * irreversible, asi que queda para office/admin y exige motivo.
+   */
+  @Post(':id/cancel')
+  @Auth(UserRole.OFFICE, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({ status: 200, description: 'Plan anulado y auditado' })
+  @ApiResponse({
+    status: 409,
+    description: 'El plan ya estaba anulado, o ya fue pagado',
+  })
+  cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() cancelPaymentPlanDto: CancelPaymentPlanDto,
+    @GetUser() user: User,
+  ) {
+    return this.paymentPlansService.cancel(id, cancelPaymentPlanDto, user);
   }
 }

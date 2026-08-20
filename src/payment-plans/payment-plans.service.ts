@@ -29,7 +29,11 @@ import { handleDatabaseError } from '../common/errors';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Surgery } from '../surgeries/entities/surgery.entity';
-import { CreatePaymentPlanDto, PaymentPlanQueryDto } from './dto';
+import {
+  CancelPaymentPlanDto,
+  CreatePaymentPlanDto,
+  PaymentPlanQueryDto,
+} from './dto';
 import { Installment, PaymentPlan } from './entities';
 import { FinancingEngine } from './financing/financing-engine';
 import { RecalculationStrategyFactory } from './strategies';
@@ -37,6 +41,7 @@ import { RecalculationStrategyFactory } from './strategies';
 const MONEY_DECIMALS = 2;
 const HALF_UP_ROUNDING = Decimal.ROUND_HALF_UP;
 const AUDIT_ACTION_PLAN_CREATED = 'payment_plan.created';
+const AUDIT_ACTION_PLAN_CANCELLED = 'payment_plan.cancelled';
 const AUDIT_TABLE_PAYMENT_PLANS = 'payment_plans';
 const DEFAULT_MONTHLY_INTEREST_RATE = '2.00';
 const DEFAULT_DOWN_PAYMENT = '0.00';
@@ -280,6 +285,75 @@ export class PaymentPlansService {
       limit,
       offset,
     };
+  }
+
+  /**
+   * Anula un plan: la deuda deja de cobrarse aunque no se haya terminado de
+   * pagar (la cirugia no se hizo, se rearmo el financiamiento, se cargo mal).
+   *
+   * Anular NO es "pagado". Las cuotas que quedaban por cobrar pasan a
+   * `cancelled` -si siguieran pendientes reapareceria en mora y dispararia
+   * recordatorios-, pero las ya pagadas quedan intactas: la plata que entro,
+   * entro, y el historial no se reescribe.
+   *
+   * Todo ocurre en UNA transaccion junto con la auditoria: o queda anulado y
+   * registrado, o no queda nada.
+   */
+  async cancel(
+    id: string,
+    cancelPaymentPlanDto: CancelPaymentPlanDto,
+    currentUser: User,
+  ): Promise<PaymentPlan> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const plan = await manager.findOne(PaymentPlan, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!plan) throw new NotFoundException('Payment plan not found');
+
+        if (plan.status === PaymentPlanStatus.CANCELLED) {
+          throw new ConflictException('El plan ya estaba anulado');
+        }
+        // Un plan pagado ya llego a su final legitimo; anularlo lo borraria.
+        if (plan.status === PaymentPlanStatus.COMPLETED) {
+          throw new ConflictException(
+            'No se puede anular un plan que ya fue pagado',
+          );
+        }
+
+        const previousData = { status: plan.status };
+        plan.status = PaymentPlanStatus.CANCELLED;
+        await manager.save(plan);
+
+        await manager.query(
+          `UPDATE installments
+              SET status = 'cancelled'
+            WHERE payment_plan_id = $1
+              AND status <> 'paid'
+              AND status <> 'cancelled'`,
+          [plan.id],
+        );
+
+        await this.auditService.log(manager, {
+          userId: currentUser.id,
+          action: AUDIT_ACTION_PLAN_CANCELLED,
+          tableName: AUDIT_TABLE_PAYMENT_PLANS,
+          recordId: plan.id,
+          previousData,
+          newData: {
+            status: plan.status,
+            reason: cancelPaymentPlanDto.reason,
+            outstandingBalanceAtCancellation: plan.outstandingBalance,
+          },
+        });
+
+        return plan;
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   private async surgeryIdsAssignedTo(userId: string): Promise<Set<string>> {
