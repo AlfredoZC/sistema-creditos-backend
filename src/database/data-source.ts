@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { databaseConnectionOptions } from './connection-options';
 
 /**
  * DataSource for the TypeORM CLI (migrations) — NOT used by the application.
@@ -10,11 +11,7 @@ import { DataSource } from 'typeorm';
  */
 export default new DataSource({
   type: 'postgres',
-  host: process.env.DB_HOST,
-  port: +process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  username: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
+  ...databaseConnectionOptions(),
   synchronize: false,
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   // Timestamped glob: only versioned migration files (Laravel-style), never
