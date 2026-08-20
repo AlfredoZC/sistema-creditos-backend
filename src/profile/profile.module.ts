@@ -5,11 +5,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Profile } from './entities/profile.entity';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { ConfigService } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
 
 @Module({
   controllers: [ProfileController],
   providers: [ProfileService, CloudinaryService, ConfigService],
-  imports: [TypeOrmModule.forFeature([Profile])],
+  imports: [
+    TypeOrmModule.forFeature([Profile]),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+  ],
   exports: [TypeOrmModule],
 })
 export class ProfileModule {}
